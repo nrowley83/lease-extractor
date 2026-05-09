@@ -883,7 +883,7 @@ async function processPDF(file) {
         'x-api-key': key,
         'anthropic-version': '2023-06-01',
         'content-type': 'application/json',
-        'anthropic-dangerous-client-side-key-access': 'buildout-demo'
+        'anthropic-dangerous-client-side-key-access': 'true'
       },
       body: JSON.stringify({
         model: 'claude-haiku-4-5-20251001',
@@ -922,14 +922,34 @@ async function processPDF(file) {
       </div>`;
 
   } catch (err) {
+    const msg = err.message === 'Failed to fetch'
+      ? 'Network error — check your API key and internet connection'
+      : err.message;
     document.getElementById('pdf-zone-inner').innerHTML = `
-      <div class="flex items-center gap-2 py-1 text-rose-600 text-xs">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
-        ${esc(err.message)}
-        <button onclick="document.getElementById('pdf-input').click()" class="ml-auto text-violet-600 hover:underline">Try again</button>
+      <div class="flex items-start gap-2 py-1 text-rose-600 text-xs">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="shrink-0 mt-0.5"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+        <span class="flex-1">${esc(msg)}</span>
+        <button onclick="resetDropZone()" class="text-violet-600 hover:underline shrink-0">Try again</button>
       </div>`;
     setStatus('');
   }
+}
+
+function resetDropZone() {
+  document.getElementById('pdf-zone-inner').innerHTML = `
+    <div class="flex items-center gap-2 font-medium text-sm mb-2">
+      Drop a lease PDF here
+      <span class="bg-violet-100 text-violet-700 text-[9px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider">Rent Schedule</span>
+    </div>
+    <div class="flex items-start gap-3">
+      <div class="ai-grad w-9 h-9 rounded-lg flex items-center justify-center shrink-0">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.8"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+      </div>
+      <p class="text-xs text-slate-500 flex-1 leading-relaxed">AI reads the PDF — pulls landlord, tenant, address, rent schedule, and all lease terms.</p>
+    </div>
+    <div class="mt-3 flex items-center gap-2">
+      <button onclick="document.getElementById('pdf-input').click()" class="border border-slate-300 bg-white hover:bg-slate-50 rounded px-3 py-1.5 text-xs font-medium">Choose PDF</button>
+    </div>`;
 }
 
 function loadPDFData(d, filename) {
@@ -967,7 +987,7 @@ async function extractWithClaude(text, source) {
         'x-api-key': key,
         'anthropic-version': '2023-06-01',
         'content-type': 'application/json',
-        'anthropic-dangerous-client-side-key-access': 'buildout-demo'
+        'anthropic-dangerous-client-side-key-access': 'true'
       },
       body: JSON.stringify({
         model: 'claude-haiku-4-5-20251001',
@@ -988,7 +1008,10 @@ async function extractWithClaude(text, source) {
     loadPDFData(extracted, source);
     setStatus('✓ Extracted — ' + (D?.rent_schedule?.length || 0) + ' rent rows');
   } catch (err) {
-    setStatus('AI error: ' + err.message + ' — falling back to text extraction');
+    const msg = err.message === 'Failed to fetch'
+      ? 'Network error — check your API key and internet connection'
+      : err.message;
+    setStatus('AI error: ' + msg + ' — falling back to text extraction');
     // fallback to regex
     D = extract(document.getElementById('paste-input').value.trim());
     if (D.lease_type) {
