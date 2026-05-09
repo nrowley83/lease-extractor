@@ -3,280 +3,606 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Lease Extractor Prototype</title>
-<style>
-  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-  :root {
-    --bg: #F7F7F5;
-    --surface: #FFFFFF;
-    --surface-2: #FAFAF8;
-    --border: #E4E4E0;
-    --border-light: #EFEFEC;
-    --text: #1A1A18;
-    --text-secondary: #6B6B65;
-    --text-tertiary: #A8A8A2;
-    --accent: #7B5CF0;
-    --accent-dark: #5B3FD4;
-    --radius: 10px;
-    --radius-sm: 7px;
+<title>Lease Extractor — Buildout</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        colors: {
+          navy: { 900: 'var(--bp-sidebar-bg)' },
+          violet: { 500:'var(--bp-button-primary-bg)', 600:'var(--bp-button-primary-hover-bg)' },
+        },
+        fontFamily: { sans: ['Inter','system-ui','-apple-system','Segoe UI','sans-serif'] }
+      }
+    }
   }
-  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; padding: 24px 16px; }
-  .container { max-width: 960px; margin: 0 auto; }
-  .page-title { font-size: 12px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-secondary); margin-bottom: 16px; }
+</script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+  :root {
+    --bp-font-family: 'Inter';
+    --bp-body-bg:    #f6f7fb;
+    --bp-sidebar-bg: #101633;
+    --bp-button-primary-bg:      #6c47ff;
+    --bp-button-primary-hover-bg:#5a36e8;
+  }
+  html,body { font-family:var(--bp-font-family,'Inter'),system-ui,sans-serif; height:100%; }
+  body { background:var(--bp-body-bg); display:flex; flex-direction:column; min-height:100vh; overflow:hidden; }
 
-  /* Top row: upload CTA + broker */
-  .top-row { display: flex; gap: 12px; align-items: stretch; margin-bottom: 12px; }
-  .cta { flex: 1; background: var(--surface-2); border: 1.5px dashed var(--border); border-radius: var(--radius); padding: 18px; text-align: center; }
-  .cta-icon { font-size: 24px; margin-bottom: 6px; }
-  .cta h2 { font-size: 13px; font-weight: 600; margin: 0 0 4px; }
-  .cta p { font-size: 12px; color: var(--text-secondary); margin: 0 0 10px; line-height: 1.5; }
-  .steps { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; }
-  .step { background: var(--surface); border: 0.5px solid var(--border); border-radius: 6px; padding: 3px 9px; font-size: 11px; color: var(--text-secondary); }
-  .step strong { color: var(--text); }
+  .spinner { display:inline-block;width:13px;height:13px;border:2px solid #e2e8f0;border-top-color:#64748b;border-radius:50%;animation:spin .7s linear infinite;vertical-align:middle;margin-right:4px; }
+  @keyframes spin { to { transform:rotate(360deg); } }
 
-  .broker-box { display: flex; flex-direction: column; justify-content: center; gap: 6px; min-width: 175px; background: var(--surface); border: 0.5px solid var(--border); border-radius: var(--radius); padding: 14px; }
-  .broker-box label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.07em; color: var(--text-secondary); }
-  .broker-box select { font-size: 12px; padding: 7px 9px; border-radius: var(--radius-sm); border: 0.5px solid var(--border); background: var(--bg); color: var(--text); cursor: pointer; }
-  .broker-box p { font-size: 11px; color: var(--text-tertiary); }
+  .ai-grad { background:linear-gradient(135deg,#ff5dc8 0%,#7c3aed 100%); }
 
-  @media(max-width:520px){ .top-row { flex-direction: column; } .broker-box { min-width: unset; } }
+  /* Stage row colors */
+  .sb-pitch { background:#DCEDFF; }
+  .sb-source { background:#E2DEFB; }
+  .sb-eval  { background:#ECE0F5; }
+  .sb-trans { background:#FFEFD0; }
+  .sb-close { background:#D8F1DD; }
+  .sb-dead  { background:#EEEEF1; }
 
-  #status { font-size: 13px; color: var(--text-secondary); margin: 8px 0; min-height: 20px; }
-  .divider { display: flex; align-items: center; gap: 10px; margin: 12px 0; color: var(--text-tertiary); font-size: 11px; }
-  .divider::before, .divider::after { content:''; flex:1; height:0.5px; background: var(--border); }
-  .spinner { display: inline-block; width: 13px; height: 13px; border: 2px solid var(--border); border-top-color: var(--text); border-radius: 50%; animation: spin 0.7s linear infinite; vertical-align: middle; margin-right: 5px; }
-  @keyframes spin { to { transform: rotate(360deg); } }
+  /* JS-driven visibility */
+  #empty-state   { display:flex; }
+  #overview-pane { display:none; }
+  .sel-cond      { display:none; }
+  .sel-cond.visible { display:flex; flex-direction:column; gap:.375rem; }
 
-  textarea { width: 100%; font-size: 12px; font-family: 'SF Mono', 'Fira Code', 'Menlo', monospace; border-radius: var(--radius-sm); padding: 10px; min-height: 72px; resize: vertical; border: 0.5px solid var(--border); background: var(--surface); color: var(--text); outline: none; }
-  textarea:focus { border-color: var(--accent); }
-  button { font-size: 12px; padding: 6px 14px; border-radius: var(--radius-sm); border: 0.5px solid var(--border); background: var(--surface); color: var(--text); cursor: pointer; transition: background 0.15s; font-family: inherit; }
-  button:hover { background: var(--bg); }
-  button.primary { background: var(--text); color: #fff; border-color: var(--text); }
-  button.primary:hover { background: #333; }
+  /* New-deal highlight flash */
+  @keyframes newrow { 0%{background:#fef9c3;} 100%{background:transparent;} }
+  .new-deal-flash { animation: newrow 2.5s ease-out forwards; }
 
-  /* Selectors panel — hidden until data loaded */
-  #selectors-panel { display: none; background: var(--surface); border: 0.5px solid var(--border); border-radius: var(--radius); padding: 14px 16px; margin: 12px 0; }
-  .sel-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.07em; color: var(--text-secondary); margin-bottom: 12px; }
-  .sel-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
-  @media(max-width:580px){ .sel-grid { grid-template-columns: 1fr 1fr; } }
-  .sel-group { display: flex; flex-direction: column; gap: 5px; }
-  .sel-group label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.07em; color: var(--text-secondary); }
-  .sel-group select, .sel-group input { font-size: 12px; padding: 7px 9px; border-radius: var(--radius-sm); border: 0.5px solid var(--border); background: var(--bg); color: var(--text); cursor: pointer; width: 100%; font-family: inherit; }
-  .sel-group input { cursor: text; }
-  .sel-group input:focus, .sel-group select:focus { outline: none; border-color: var(--accent); }
-  .sel-cond { display: none; }
-  .sel-cond.visible { display: flex; flex-direction: column; gap: 5px; }
+  .anim-fadein { animation:fadein .2s ease-out; }
+  @keyframes fadein { from{opacity:0;transform:translateY(3px);}to{opacity:1;transform:none;} }
 
-  /* Overview */
-  #overview { display: none; }
-  .ov-header { display: flex; align-items: center; justify-content: space-between; margin: 1.25rem 0 14px; flex-wrap: wrap; gap: 10px; }
-  .ov-title { font-size: 24px; font-weight: 700; }
-  .ov-btns { display: flex; gap: 8px; flex-wrap: wrap; }
-  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
-  @media(max-width:580px){ .grid2 { grid-template-columns: 1fr; } }
-
-  .panel { background: var(--surface); border: 0.5px solid var(--border); border-radius: var(--radius); overflow: hidden; }
-  .panel-header { padding: 11px 16px; border-bottom: 0.5px solid var(--border-light); display: flex; align-items: center; justify-content: space-between; }
-  .panel-title { font-size: 13px; font-weight: 600; }
-  .panel-add { font-size: 12px; color: var(--accent); font-weight: 500; cursor: pointer; }
-  .panel-body { padding: 14px 16px; }
-
-  /* Broker card */
-  .broker-card { display: flex; align-items: center; gap: 12px; }
-  .b-avatar { width: 42px; height: 42px; border-radius: 50%; background: linear-gradient(135deg, var(--accent), var(--accent-dark)); display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 700; color: #fff; flex-shrink: 0; }
-  .b-info .b-label { font-size: 10px; color: var(--accent); font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; }
-  .b-info .b-name { font-size: 14px; font-weight: 600; }
-  .b-comm { margin-left: auto; display: flex; align-items: center; gap: 10px; }
-  .b-ring { display: inline-flex; align-items: center; justify-content: center; width: 42px; height: 42px; border-radius: 50%; border: 2.5px solid var(--border); font-size: 11px; font-weight: 600; color: var(--text-secondary); flex-shrink: 0; }
-  .b-amt { font-size: 15px; font-weight: 700; }
-  .b-lbl { font-size: 11px; color: var(--text-tertiary); }
-  .empty-broker { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 20px; gap: 6px; }
-  .empty-broker .ei { font-size: 26px; opacity: 0.4; }
-  .empty-broker p { font-size: 13px; font-weight: 500; color: var(--text-secondary); }
-
-  /* Field rows */
-  .field-list { display: flex; flex-direction: column; }
-  .field-row { display: flex; align-items: baseline; padding: 8px 0; border-bottom: 0.5px solid var(--border-light); gap: 10px; }
-  .field-row:last-child { border-bottom: none; }
-  .field-label { font-size: 12px; font-weight: 600; color: var(--text); width: 148px; flex-shrink: 0; }
-  .field-value { font-size: 13px; color: var(--text); flex: 1; }
-  .field-value.empty { color: var(--text-tertiary); }
-  .field-value.hi { font-weight: 700; font-size: 14px; }
-  .badge { display: inline-block; font-size: 11px; font-weight: 500; padding: 2px 8px; border-radius: 20px; background: var(--bg); color: var(--text-secondary); }
-  .badge.purple { background: #EEE9FD; color: var(--accent-dark); }
-  .badge.green  { background: #EDFAF3; color: #1A7F4B; }
-  .badge.blue   { background: #E6F1FB; color: #0C447C; }
-  .badge.amber  { background: #FEF3E2; color: #92400E; }
-
-  /* Rent schedule table */
-  .rs-wrap { overflow-x: auto; }
-  .rs-table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 580px; }
-  .rs-table th { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-secondary); text-align: left; padding: 8px 12px; border-bottom: 0.5px solid var(--border); background: var(--bg); white-space: nowrap; }
-  .rs-table td { padding: 10px 12px; border-bottom: 0.5px solid var(--border-light); font-size: 13px; white-space: nowrap; }
-  .rs-table tbody tr:last-child td { border-bottom: none; }
-  .rs-table tbody tr:hover { background: var(--bg); }
-  .rs-table td.num { text-align: right; font-variant-numeric: tabular-nums; font-weight: 500; }
-  .rs-table td.ctr { text-align: center; color: var(--text-secondary); }
-  .empty-note { color: var(--text-tertiary); padding: 14px 12px; font-size: 13px; text-align: center; }
+  /* Toast */
+  #toast { transition: opacity .3s, transform .3s; }
+  #toast.hide { opacity:0; transform:translateY(12px); pointer-events:none; }
 </style>
 </head>
-<body>
-<div class="container">
-  <h1 class="page-title">Lease Extractor — Prototype</h1>
+<body class="text-slate-800">
 
-  <div class="top-row">
-    <div class="cta">
-      <div class="cta-icon">📎</div>
-      <h2>Upload your lease PDF in the chat with Claude</h2>
-      <p>Claude reads the PDF and you can paste the extracted text below to populate all fields.</p>
-      <div class="steps">
-        <div class="step"><strong>1.</strong> Attach PDF in chat</div>
-        <div class="step"><strong>2.</strong> Claude extracts all terms</div>
-        <div class="step"><strong>3.</strong> Paste text → widget fills</div>
+<!-- ── TOP NAV ──────────────────────────────────────────── -->
+<nav style="background:var(--bp-sidebar-bg)" class="text-white h-14 flex items-center px-5 gap-5 shadow-sm z-30 shrink-0">
+  <a href="#" class="flex items-center gap-2 mr-1 shrink-0">
+    <div class="w-8 h-8 rounded-md bg-white/10 flex items-center justify-center">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M3 11.5L12 4l9 7.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z" stroke="white" stroke-width="1.6"/></svg>
+    </div>
+    <span class="font-semibold tracking-tight">buildout</span>
+  </a>
+  <div class="flex items-center gap-1 text-sm">
+    <button class="px-3 py-1.5 rounded hover:bg-white/10 flex items-center gap-1">
+      <span class="w-2 h-2 rounded-sm bg-orange-400 inline-block"></span> CRM
+      <svg width="12" height="12" viewBox="0 0 20 20" fill="currentColor"><path d="M5 8l5 5 5-5"/></svg>
+    </button>
+    <button class="px-3 py-1.5 rounded bg-white/10 flex items-center gap-1">
+      <span class="w-2 h-2 rounded-full bg-violet-400 inline-block"></span> Deals
+      <svg width="12" height="12" viewBox="0 0 20 20" fill="currentColor"><path d="M5 8l5 5 5-5"/></svg>
+    </button>
+  </div>
+  <div class="ml-auto flex items-center gap-3">
+    <button class="ai-grad text-white px-3 py-1.5 rounded-md text-sm font-medium flex items-center gap-1.5 shadow">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l1.8 5.4L19 9l-5.2 1.6L12 16l-1.8-5.4L5 9l5.2-1.6z"/></svg>
+      Ask AI
+    </button>
+    <button class="flex items-center gap-2 hover:bg-white/10 px-2 py-1 rounded">
+      <div class="w-7 h-7 rounded-full bg-slate-300"></div>
+      <span class="text-sm">Nick Rowley</span>
+      <svg width="12" height="12" viewBox="0 0 20 20" fill="currentColor"><path d="M5 8l5 5 5-5"/></svg>
+    </button>
+  </div>
+</nav>
+
+<!-- ── PIPELINE PAGE ─────────────────────────────────────── -->
+<div class="flex-1 relative overflow-hidden">
+
+  <!-- Pipeline content (blurred while modal open) -->
+  <div id="pipeline-page" class="absolute inset-0 overflow-y-auto px-6 pt-5 pb-10 transition-all duration-300" style="filter:blur(2px);pointer-events:none;user-select:none;">
+
+    <!-- Stage strip -->
+    <div id="stage-strip" class="flex items-stretch bg-white rounded-lg border border-slate-200 overflow-hidden mb-3 text-xs"></div>
+
+    <!-- Filter bar -->
+    <div class="flex items-center gap-2 mb-3 flex-wrap">
+      <div class="relative">
+        <input class="border border-slate-200 rounded-md pl-8 pr-3 py-1.5 text-sm w-64 bg-white" placeholder="Search name, address, or identifier">
+        <svg class="absolute left-2.5 top-2 text-slate-400" width="14" height="14" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"/><path d="M20 20l-3.5-3.5" stroke="currentColor" stroke-width="2"/></svg>
+      </div>
+      <button class="border border-slate-200 rounded-md px-3 py-1.5 text-sm bg-white">Deal Type ▾</button>
+      <button class="border border-slate-200 rounded-md px-3 py-1.5 text-sm bg-white">Property Type ▾</button>
+      <button class="border border-slate-200 rounded-md px-3 py-1.5 text-sm bg-white">Close Date: 2026 ▾</button>
+      <div class="ml-auto flex items-center gap-2">
+        <div class="border border-slate-200 rounded-md bg-white inline-flex p-0.5 text-sm">
+          <span class="px-3 py-1 bg-slate-100 rounded font-medium">Table</span>
+          <span class="px-3 py-1 flex items-center gap-1">Board <span class="text-[10px] bg-violet-500 text-white px-1.5 rounded">NEW</span></span>
+        </div>
+        <button class="border border-slate-200 rounded-md px-3 py-1.5 text-sm bg-white flex items-center gap-1.5">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg>New Report
+        </button>
+        <div class="inline-flex">
+          <button class="bg-violet-500 hover:bg-violet-600 text-white px-3 py-1.5 text-sm rounded-l-md font-medium">Create Deal</button>
+          <button onclick="openModal()" class="ai-grad text-white px-2.5 py-1.5 text-sm rounded-r-md font-medium border-l border-white/30 flex items-center gap-1">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l1.8 5.4L19 9l-5.2 1.6L12 16l-1.8-5.4L5 9l5.2-1.6z"/></svg>with AI
+          </button>
+        </div>
       </div>
     </div>
-    <div class="broker-box">
-      <label for="broker-sel">Broker name</label>
-      <select id="broker-sel">
-        <option value="">— Select —</option>
-        <option value="Nick Rowley">Nick Rowley</option>
-        <option value="Bruce Campbell, SIOR">Bruce Campbell, SIOR</option>
-      </select>
-      <p>Assigned as Primary Broker</p>
-    </div>
+
+    <!-- Table -->
+    <div id="pipeline-table" class="bg-white border border-slate-200 rounded-lg overflow-hidden"></div>
   </div>
 
-  <div id="status"></div>
+  <!-- ── MODAL OVERLAY ──────────────────────────────────── -->
+  <div id="modal-overlay" class="absolute inset-0 bg-slate-900/50 flex items-start justify-center pt-8 px-6 pb-6 overflow-y-auto z-20">
+    <div class="bg-white rounded-lg shadow-2xl w-full max-w-[860px] flex flex-col anim-fadein" style="max-height:calc(100vh - 120px)">
 
-  <div class="divider">or paste lease text directly</div>
-  <textarea id="paste-input" placeholder="Paste lease contract text here and click Extract…"></textarea>
-  <div style="margin-top:8px;display:flex;gap:8px;">
-    <button class="primary" onclick="extractFromPaste()">Extract from text</button>
-    <button onclick="clearAll()">↺ Clear</button>
+      <!-- Modal header -->
+      <div class="px-5 py-4 border-b border-slate-200 flex items-start gap-3 shrink-0">
+        <div class="ai-grad w-9 h-9 rounded-lg flex items-center justify-center text-white shrink-0 mt-0.5">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l1.8 5.4L19 9l-5.2 1.6L12 16l-1.8-5.4L5 9l5.2-1.6z"/></svg>
+        </div>
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center gap-2 mb-0.5">
+            <span class="font-semibold">Create deal with AI</span>
+            <span class="bg-violet-500 text-white text-[10px] px-1.5 py-0.5 rounded font-medium">NEW</span>
+          </div>
+          <p class="text-xs text-slate-500">Drop a lease PDF, or paste an email, listing, LOI, or voicemail transcript — AI extracts deal details and rent schedule.</p>
+        </div>
+        <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600 ml-2 mt-0.5 shrink-0 text-lg leading-none">✕</button>
+      </div>
+
+      <!-- Two-panel body -->
+      <div class="flex flex-1 min-h-0 overflow-hidden">
+
+        <!-- LEFT: Input -->
+        <div class="w-[320px] shrink-0 border-r border-slate-200 p-5 flex flex-col gap-3 overflow-y-auto">
+          <!-- PDF drop zone -->
+          <div class="border-2 border-dashed border-violet-300 rounded-lg p-4" style="background:#f5f3ff40">
+            <div class="flex items-center gap-2 font-medium text-sm mb-2">
+              Drop a lease PDF here
+              <span class="bg-violet-100 text-violet-700 text-[9px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider">Rent Schedule</span>
+            </div>
+            <div class="flex items-start gap-3">
+              <div class="ai-grad w-9 h-9 rounded-lg flex items-center justify-center shrink-0">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.8"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+              </div>
+              <p class="text-xs text-slate-500 flex-1 leading-relaxed">AI reads the PDF in your browser — pulls landlord, tenant, dates, lease type, security deposit, and the full rent schedule.</p>
+            </div>
+            <div class="mt-3">
+              <input type="file" id="pdf-input" accept=".pdf" class="hidden">
+              <button onclick="document.getElementById('pdf-input').click()" class="border border-slate-300 bg-white hover:bg-slate-50 rounded px-3 py-1.5 text-xs font-medium">Choose PDF</button>
+            </div>
+          </div>
+
+          <p class="text-[11px] text-violet-600 leading-relaxed">Prototype demo: any dropped PDF loads sample lease text below. Production version will run OCR + LLM server-side.</p>
+
+          <div class="flex items-center gap-2 text-slate-400 text-[10px] uppercase tracking-wider">
+            <div class="flex-1 h-px bg-slate-200"></div>or paste content<div class="flex-1 h-px bg-slate-200"></div>
+          </div>
+
+          <div>
+            <p class="text-xs text-slate-600 mb-2">Try a sample:</p>
+            <div class="flex flex-wrap gap-1.5">
+              <button onclick="loadSample('loi')"      class="border border-slate-200 rounded-full px-3 py-1 text-xs hover:bg-slate-50">Forwarded LOI email</button>
+              <button onclick="loadSample('listing')"  class="border border-slate-200 rounded-full px-3 py-1 text-xs hover:bg-slate-50">Listing brief</button>
+              <button onclick="loadSample('voicemail')" class="border border-slate-200 rounded-full px-3 py-1 text-xs hover:bg-slate-50">Voicemail transcript</button>
+              <button onclick="loadSample('lease')"    class="border border-slate-200 rounded-full px-3 py-1 text-xs hover:bg-slate-50">Lease PDF (extracted text)</button>
+            </div>
+          </div>
+
+          <textarea id="paste-input" placeholder="Paste email thread, listing copy, LOI, voicemail transcript, or property description…"
+            class="flex-1 border border-slate-200 rounded-lg p-3 text-xs font-mono resize-none min-h-[180px] bg-white focus:outline-none focus:border-violet-400 text-slate-700 leading-relaxed"></textarea>
+
+          <button onclick="extractFromPaste()"
+            class="ai-grad text-white w-full py-2.5 rounded-lg text-sm font-medium flex items-center justify-center gap-2 shadow hover:opacity-90 transition-opacity">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l1.8 5.4L19 9l-5.2 1.6L12 16l-1.8-5.4L5 9l5.2-1.6z"/></svg>
+            Extract deal details
+          </button>
+
+          <div id="status" class="text-xs text-slate-500 min-h-[1.25rem] text-center"></div>
+        </div>
+
+        <!-- RIGHT: Extracted fields -->
+        <div class="flex-1 flex flex-col overflow-y-auto">
+          <div class="px-5 pt-5 pb-2 shrink-0">
+            <h3 class="font-semibold text-slate-800">Extracted fields</h3>
+          </div>
+
+          <!-- Empty state -->
+          <div id="empty-state" class="flex-1 flex flex-col items-center justify-center gap-3 text-slate-400 px-8 mx-5 mb-5 border-2 border-dashed border-slate-200 rounded-lg min-h-[280px]">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2"><path d="M12 2l1.8 5.4L19 9l-5.2 1.6L12 16l-1.8-5.4L5 9l5.2-1.6z"/></svg>
+            <p class="text-sm text-center leading-relaxed">Paste content on the left and click <strong class="text-slate-600">Extract</strong> — fields will appear here for you to review and edit.</p>
+          </div>
+
+          <!-- Overview pane -->
+          <div id="overview-pane" class="px-5 pb-5 space-y-4 anim-fadein">
+
+            <div class="bg-white border border-slate-200 rounded-lg overflow-hidden">
+              <div class="px-4 py-2.5 border-b border-slate-100 bg-slate-50">
+                <span class="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Deal details</span>
+              </div>
+              <div class="p-4 space-y-3">
+                <div class="flex flex-col gap-1">
+                  <label for="broker-sel" class="text-[10px] font-semibold uppercase tracking-wider text-slate-500">Primary Broker</label>
+                  <select id="broker-sel" class="border border-slate-200 rounded px-2 py-1.5 text-sm bg-slate-50 focus:outline-none focus:ring-1 focus:ring-violet-500">
+                    <option value="">— Select —</option>
+                    <option value="Nick Rowley">Nick Rowley</option>
+                    <option value="Bruce Campbell, SIOR">Bruce Campbell, SIOR</option>
+                  </select>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                  <div class="flex flex-col gap-1">
+                    <label for="agreement-sel" class="text-[10px] font-semibold uppercase tracking-wider text-slate-500">Agreement type</label>
+                    <select id="agreement-sel" class="border border-slate-200 rounded px-2 py-1.5 text-sm bg-slate-50 focus:outline-none focus:ring-1 focus:ring-violet-500">
+                      <option value="">— Select —</option>
+                      <option value="New">New</option><option value="Renewal">Renewal</option>
+                      <option value="Expansion">Expansion</option><option value="Sublease">Sublease</option>
+                    </select>
+                  </div>
+                  <div class="flex flex-col gap-1">
+                    <label for="deal-sel" class="text-[10px] font-semibold uppercase tracking-wider text-slate-500">Deal type</label>
+                    <select id="deal-sel" class="border border-slate-200 rounded px-2 py-1.5 text-sm bg-slate-50 focus:outline-none focus:ring-1 focus:ring-violet-500">
+                      <option value="">— Select —</option>
+                      <option value="Sale">Sale</option><option value="Lease">Lease</option>
+                      <option value="Buyer Rep">Buyer Rep</option><option value="Tenant Rep">Tenant Rep</option>
+                      <option value="Consulting Fees / BOV">Consulting Fees / BOV</option>
+                      <option value="Property Management">Property Management</option><option value="Other">Other</option>
+                    </select>
+                  </div>
+                  <div class="flex flex-col gap-1">
+                    <label for="leasetype-sel" class="text-[10px] font-semibold uppercase tracking-wider text-slate-500">Lease type</label>
+                    <select id="leasetype-sel" class="border border-slate-200 rounded px-2 py-1.5 text-sm bg-slate-50 focus:outline-none focus:ring-1 focus:ring-violet-500">
+                      <option value="">— Select —</option>
+                      <option value="Gross">Gross</option><option value="Modified Gross">Modified Gross</option>
+                      <option value="NNN">NNN (Triple Net)</option><option value="Modified Net">Modified Net</option>
+                      <option value="Full Service">Full Service</option><option value="Ground Lease">Ground Lease</option>
+                    </select>
+                  </div>
+                  <div class="flex flex-col gap-1">
+                    <label for="communit-sel" class="text-[10px] font-semibold uppercase tracking-wider text-slate-500">Commission units</label>
+                    <select id="communit-sel" class="border border-slate-200 rounded px-2 py-1.5 text-sm bg-slate-50 focus:outline-none focus:ring-1 focus:ring-violet-500">
+                      <option value="">— Select —</option>
+                      <option value="% of Rent">% of Rent</option><option value="$/SF (Flat Fee)">$/SF (Flat Fee)</option>
+                      <option value="Flat Rate">Flat Rate</option><option value="$/SF/Month">$/SF/Month</option>
+                      <option value="$/SF/Year">$/SF/Year</option>
+                    </select>
+                  </div>
+                  <div class="sel-cond" id="sale-price-group">
+                    <label for="sale-price-input" class="text-[10px] font-semibold uppercase tracking-wider text-slate-500">Sale price</label>
+                    <input type="text" id="sale-price-input" placeholder="$0.00" class="border border-slate-200 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-violet-500 mt-1">
+                  </div>
+                  <div class="sel-cond" id="total-rent-group">
+                    <label class="text-[10px] font-semibold uppercase tracking-wider text-slate-500">Total rent</label>
+                    <input type="text" id="total-rent-display" readonly class="border border-slate-200 rounded px-2 py-1.5 text-sm bg-slate-50 font-semibold cursor-default mt-1">
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="bg-white border border-slate-200 rounded-lg overflow-hidden">
+              <div class="px-4 py-2.5 border-b border-slate-100 bg-slate-50">
+                <span class="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Property &amp; Space</span>
+              </div>
+              <div class="p-4"><dl class="text-sm grid grid-cols-2 gap-y-2.5" id="pf"></dl></div>
+            </div>
+
+            <div class="bg-white border border-slate-200 rounded-lg overflow-hidden">
+              <div class="px-4 py-2.5 border-b border-slate-100 bg-slate-50">
+                <span class="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Transaction</span>
+              </div>
+              <div class="p-4"><dl class="text-sm grid grid-cols-2 gap-y-2.5" id="tf"></dl></div>
+            </div>
+
+            <div class="bg-white border border-slate-200 rounded-lg overflow-hidden">
+              <div class="px-4 py-2.5 border-b border-slate-100 bg-slate-50 flex items-center gap-2">
+                <span class="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Rent Schedule</span>
+                <span id="rs-badge" class="hidden text-[10px] bg-emerald-50 text-emerald-700 px-1.5 py-0.5 rounded font-medium"></span>
+                <span class="text-[10px] bg-violet-100 text-violet-700 px-1.5 py-0.5 rounded font-medium flex items-center gap-1">
+                  <svg width="9" height="9" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l1.8 5.4L19 9l-5.2 1.6L12 16l-1.8-5.4L5 9l5.2-1.6z"/></svg>Extracted from PDF
+                </span>
+                <div class="ml-auto flex gap-1.5">
+                  <button onclick="copyCSV()"     class="text-[11px] border border-slate-200 hover:bg-slate-50 rounded px-2 py-1">Copy CSV</button>
+                  <button onclick="downloadCSV()" class="text-[11px] border border-slate-200 hover:bg-slate-50 rounded px-2 py-1">↓ Download</button>
+                </div>
+              </div>
+              <div class="overflow-x-auto">
+                <table class="w-full text-sm min-w-[480px]">
+                  <thead class="bg-slate-50 text-slate-500 text-xs uppercase tracking-wider">
+                    <tr>
+                      <th class="text-left font-medium px-4 py-2">Start date</th>
+                      <th class="text-left font-medium px-4 py-2">End date</th>
+                      <th class="text-center font-medium px-3 py-2">Mo.</th>
+                      <th class="text-right font-medium px-4 py-2">Lease rate</th>
+                      <th class="text-right font-medium px-4 py-2">Total rent</th>
+                      <th class="text-center font-medium px-3 py-2">Comm %</th>
+                      <th class="text-right font-medium px-4 py-2">Comm $</th>
+                    </tr>
+                  </thead>
+                  <tbody id="rb"></tbody>
+                  <tfoot id="rs-foot" style="display:none">
+                    <tr class="border-t border-violet-100" style="background:#f5f3ff">
+                      <td colspan="4" class="px-4 py-2 text-right text-[10px] uppercase tracking-wider text-violet-700 font-semibold">Total Rent</td>
+                      <td id="rs-total" class="px-4 py-2 text-right tabular-nums font-semibold text-violet-700">—</td>
+                      <td colspan="2"></td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            </div>
+
+          </div><!-- /overview-pane -->
+        </div><!-- /right panel -->
+      </div><!-- /two-panel -->
+
+      <!-- Footer -->
+      <div class="px-5 py-3 border-t border-slate-200 flex items-center gap-3 shrink-0">
+        <p class="text-xs text-slate-400">AI may make mistakes — review before saving.</p>
+        <div class="ml-auto flex items-center gap-2">
+          <button onclick="closeModal()" class="text-slate-600 text-sm px-4 py-1.5 hover:bg-slate-50 rounded">Cancel</button>
+          <button id="create-btn" onclick="createDeal()"
+            class="text-sm px-4 py-1.5 rounded-md font-medium bg-slate-100 text-slate-400 cursor-not-allowed"
+            disabled>Create Deal</button>
+        </div>
+      </div>
+
+    </div><!-- /modal card -->
+  </div><!-- /modal overlay -->
+
+  <!-- Toast -->
+  <div id="toast" class="hide fixed bottom-6 left-1/2 -translate-x-1/2 bg-slate-900 text-white text-sm px-4 py-2.5 rounded-lg shadow-xl flex items-center gap-3 z-50 max-w-lg">
+    <svg class="text-emerald-400 shrink-0" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 13l4 4 10-10"/></svg>
+    <span id="toast-msg"></span>
   </div>
 
-  <!-- Selectors panel — revealed after data loads -->
-  <div id="selectors-panel">
-    <div class="sel-label">Deal details</div>
-    <div class="sel-grid">
-      <div class="sel-group">
-        <label for="agreement-sel">Agreement type</label>
-        <select id="agreement-sel">
-          <option value="">— Select —</option>
-          <option value="New">New</option>
-          <option value="Renewal">Renewal</option>
-          <option value="Expansion">Expansion</option>
-          <option value="Sublease">Sublease</option>
-        </select>
-      </div>
-      <div class="sel-group">
-        <label for="deal-sel">Deal type</label>
-        <select id="deal-sel">
-          <option value="">— Select —</option>
-          <option value="Sale">Sale</option>
-          <option value="Lease">Lease</option>
-          <option value="Buyer Rep">Buyer Rep</option>
-          <option value="Tenant Rep">Tenant Rep</option>
-          <option value="Consulting Fees / BOV">Consulting Fees / BOV</option>
-          <option value="Property Management">Property Management</option>
-          <option value="Other">Other</option>
-        </select>
-      </div>
-      <div class="sel-group">
-        <label for="leasetype-sel">Lease type</label>
-        <select id="leasetype-sel">
-          <option value="">— Select —</option>
-          <option value="Gross">Gross</option>
-          <option value="Modified Gross">Modified Gross</option>
-          <option value="NNN">NNN (Triple Net)</option>
-          <option value="Modified Net">Modified Net</option>
-          <option value="Full Service">Full Service</option>
-          <option value="Ground Lease">Ground Lease</option>
-        </select>
-      </div>
-      <div class="sel-group">
-        <label for="communit-sel">Commission units</label>
-        <select id="communit-sel">
-          <option value="">— Select —</option>
-          <option value="% of Rent">% of Rent</option>
-          <option value="$/SF (Flat Fee)">$/SF (Flat Fee)</option>
-          <option value="Flat Rate">Flat Rate</option>
-          <option value="$/SF/Month">$/SF/Month</option>
-          <option value="$/SF/Year">$/SF/Year</option>
-        </select>
-      </div>
-      <div class="sel-cond" id="sale-price-group">
-        <label for="sale-price-input">Sale price</label>
-        <input type="text" id="sale-price-input" placeholder="$0.00">
-      </div>
-      <div class="sel-cond" id="total-rent-group">
-        <label>Total rent</label>
-        <input type="text" id="total-rent-display" readonly style="font-weight:600;cursor:default;">
-      </div>
-    </div>
-  </div>
-
-  <!-- Overview -->
-  <div id="overview">
-    <div class="ov-header">
-      <span class="ov-title">Overview</span>
-      <div class="ov-btns">
-        <button onclick="copyCSV()">Copy CSV</button>
-        <button onclick="downloadCSV()">⬇ Download CSV</button>
-      </div>
-    </div>
-
-    <div class="grid2">
-      <div class="panel">
-        <div class="panel-header"><span class="panel-title">Internal Brokers</span><span class="panel-add">+ Add broker</span></div>
-        <div class="panel-body" id="ibody"><div class="empty-broker"><div class="ei">👤</div><p>No brokers have been added.</p></div></div>
-      </div>
-      <div class="panel">
-        <div class="panel-header"><span class="panel-title">Outside Brokers</span><span class="panel-add">+ Add broker</span></div>
-        <div class="panel-body"><div class="empty-broker"><div class="ei">👤</div><p>No brokers have been added.</p></div></div>
-      </div>
-    </div>
-
-    <div class="grid2">
-      <div class="panel">
-        <div class="panel-header"><span class="panel-title">Property &amp; Space</span></div>
-        <div class="panel-body"><div class="field-list" id="pf"></div></div>
-      </div>
-      <div class="panel">
-        <div class="panel-header"><span class="panel-title">Transaction</span></div>
-        <div class="panel-body"><div class="field-list" id="tf"></div></div>
-      </div>
-    </div>
-
-    <div class="panel">
-      <div class="panel-header"><span class="panel-title">Rent Schedule</span></div>
-      <div class="rs-wrap">
-        <table class="rs-table">
-          <thead><tr>
-            <th>Start date</th><th>End date</th><th class="ctr">Months</th>
-            <th style="text-align:right">Lease rate</th><th style="text-align:right">Total rent</th>
-            <th class="ctr">Commission %</th><th style="text-align:right">Commission $</th><th>Notes</th>
-          </tr></thead>
-          <tbody id="rb"></tbody>
-        </table>
-      </div>
-    </div>
-  </div>
-</div>
+</div><!-- /pipeline wrapper -->
 
 <script>
+/* ── Pipeline data ───────────────────────────────────────── */
+const MONTHS = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+const STAGES = [
+  { key:'pitching',   label:'Pitching',   color:'pitch' },
+  { key:'evaluating', label:'Evaluating', color:'eval'  },
+  { key:'transacting',label:'Transacting',color:'trans' },
+  { key:'closed',     label:'Closed',     color:'close' },
+  { key:'dead',       label:'Dead',       color:'dead'  },
+];
+const STAGE_DOTS = {pitching:'#5BA6E6',sourcing:'#9182e5',evaluating:'#a87dd1',transacting:'#e3a93e',closed:'#5fc079',dead:'#aaa'};
+
+let DEALS = [
+  { id:114679, ref:'S26-003', title:'123 Main Street',   city:'Chicago, IL',    dealType:'Sale',      propType:'Land',            stage:'pitching',   value:1400000, gross:0,      openTasks:2, nextDate:{m:'MAY',d:1,label:'Listing Executed'}, alert:false, sf:32000 },
+  { id:114680, ref:'L26-002', title:'123 Main ST',       city:'Wilmington, NC', dealType:'Lease',     propType:'Office',          stage:'pitching',   value:100000,  gross:0,      openTasks:8, nextDate:{m:'MAY',d:2,label:'LOI Executed'},      alert:false, sf:14500 },
+  { id:115347, ref:'S26-0',   title:'118 North Peoria',  city:'Peachtree, TX',  dealType:'Sale',      propType:'Special Purpose', stage:'pitching',   value:0,       gross:0,      openTasks:1, nextDate:null, alert:true,  sf:600 },
+  { id:114677, ref:'114677',  title:'3200 Michigan Ave', city:'Chicago, IL',    dealType:'Sale',      propType:'Office',          stage:'pitching',   value:1000000, gross:0,      openTasks:1, nextDate:null, alert:false, sf:48000 },
+  { id:114670, ref:'L26-004', title:'Sunrise Place',     city:'Oak Park, IL',   dealType:'Lease',     propType:'Multifamily',     stage:'evaluating', value:400000,  gross:3000,   openTasks:2, nextDate:null, alert:true,  sf:23000 },
+  { id:114664, ref:'114664',  title:'The Mobi Building', city:'Chicago, IL',    dealType:'Sale',      propType:'Office',          stage:'evaluating', value:100000,  gross:0,      openTasks:5, nextDate:null, alert:false, sf:18000 },
+  { id:114675, ref:'S26-001', title:'730 Larrabee Rd',   city:'Chicago, IL',    dealType:'Sale',      propType:'Office',          stage:'transacting',value:5000000, gross:100000, openTasks:2, nextDate:{m:'MAY',d:1,label:'Contract Executed'}, alert:false, sf:120000 },
+  { id:114672, ref:'114672',  title:'456 Sesame Street', city:'Boston, MA',     dealType:'Sale',      propType:'Office',          stage:'transacting',value:500000,  gross:13500,  openTasks:2, nextDate:null, alert:false, sf:7500 },
+  { id:114663, ref:'114663',  title:'123 Main Street',   city:'Boca Raton, FL', dealType:'Other',     propType:'Office',          stage:'transacting',value:10000,   gross:500,    openTasks:0, nextDate:null, alert:false, sf:1200 },
+  { id:114665, ref:'L26-001', title:'Belton Heights | Suite 101', city:'Chicago, IL', dealType:'Lease', propType:'Office',       stage:'closed',     value:26770,   gross:1606,   openTasks:6, nextDate:{m:'DEC',d:14,label:'Listing Executed'}, alert:true, sf:5800 },
+  { id:114676, ref:'S26-003', title:'1600 Pennsylvania Ave', city:'Washington, DC', dealType:'Sale',  propType:'Office',          stage:'closed',     value:10000000,gross:150000, openTasks:4, nextDate:null, alert:false, sf:55000 },
+  { id:114674, ref:'114674',  title:'Tenant Rep Assignment', city:'Boca Raton, FL', dealType:'Tenant Rep', propType:'Retail',    stage:'closed',     value:100000,  gross:3000,   openTasks:0, nextDate:null, alert:false, sf:3100 },
+];
+
+const fmtUSD = n => n === 0 ? '$0' : '$' + Number(n).toLocaleString();
+const dealsBy = k => DEALS.filter(d => d.stage === k);
+const sumVal  = arr => arr.reduce((a,b)=>a+(b.value||0),0);
+const sumGross= arr => arr.reduce((a,b)=>a+(b.gross||0),0);
+
+/* ── Pipeline render ─────────────────────────────────────── */
+function renderPipeline(highlightId) {
+  // Stage strip
+  const totalAll = DEALS.reduce((a,b)=>a+(b.value||0),0);
+  document.getElementById('stage-strip').innerHTML =
+    `<button class="flex-1 px-4 py-3 text-left border-r border-slate-200 hover:bg-slate-50">
+      <div class="text-xs text-slate-500">All</div>
+      <div class="text-sm font-semibold mt-0.5">${DEALS.length} Deals</div>
+      <div class="text-xs text-slate-400">${fmtUSD(totalAll)}</div>
+    </button>` +
+    STAGES.map((s,i) => {
+      const ds = dealsBy(s.key);
+      return `<button class="flex-1 px-4 py-3 text-left ${i<STAGES.length-1?'border-r border-slate-200':''} hover:bg-slate-50">
+        <div class="text-xs text-slate-500 flex items-center gap-1.5">
+          <span class="w-1.5 h-1.5 rounded-full inline-block" style="background:${STAGE_DOTS[s.key]}"></span>${s.label}
+        </div>
+        ${s.key !== 'dead' ? `<div class="text-sm font-semibold mt-0.5">${ds.length}</div><div class="text-xs text-slate-400">${fmtUSD(sumGross(ds))}</div>` : ''}
+      </button>`;
+    }).join('');
+
+  // Table
+  const shown = STAGES.filter(s => dealsBy(s.key).length > 0);
+  document.getElementById('pipeline-table').innerHTML =
+    `<table class="w-full text-sm">
+      <thead class="bg-slate-50 text-slate-500">
+        <tr class="text-left">
+          <th class="w-8"></th>
+          <th class="py-2.5 px-3 font-medium">Deal Title</th>
+          <th class="py-2.5 px-3 font-medium">Deal ID</th>
+          <th class="py-2.5 px-3 font-medium">Location</th>
+          <th class="py-2.5 px-3 font-medium">Deal Type</th>
+          <th class="py-2.5 px-3 font-medium">Property Type</th>
+          <th class="py-2.5 px-3 font-medium">Brokers</th>
+          <th class="py-2.5 px-3 font-medium text-right">Transaction Value</th>
+          <th class="py-2.5 px-3 font-medium text-right">Broker Gross</th>
+          <th class="py-2.5 px-3 font-medium">Open Tasks</th>
+          <th class="py-2.5 px-3 font-medium">Next Critical Date</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        ${shown.map(s => {
+          const ds = dealsBy(s.key);
+          return `<tr class="sb-${s.color} font-medium text-slate-700">
+              <td colspan="7" class="py-2 px-3">${s.label} (${ds.length} of ${ds.length})</td>
+              <td class="py-2 px-3 text-right">${fmtUSD(sumVal(ds))}</td>
+              <td class="py-2 px-3 text-right">${fmtUSD(sumGross(ds))}</td>
+              <td colspan="3"></td>
+            </tr>
+            ${ds.map(d => `
+              <tr id="deal-row-${d.id}" class="border-t border-slate-100 hover:bg-slate-50${d.id===highlightId?' new-deal-flash':''}">
+                <td class="px-2 align-middle">${d.alert?'<span class="inline-flex w-5 h-5 rounded-full bg-rose-50 text-rose-600 items-center justify-center text-xs font-bold">!</span>':''}</td>
+                <td class="py-2 px-3"><a class="text-violet-600 hover:underline">${esc(d.title)}</a></td>
+                <td class="py-2 px-3"><span class="text-violet-600">${esc(d.ref)}</span></td>
+                <td class="py-2 px-3 text-slate-600">${esc(d.city)}</td>
+                <td class="py-2 px-3 text-slate-600">${esc(d.dealType)}</td>
+                <td class="py-2 px-3 text-slate-600">${esc(d.propType)}</td>
+                <td class="py-2 px-3"><div class="w-6 h-6 rounded-full bg-slate-200 flex items-center justify-center text-[10px] text-slate-500">MC</div></td>
+                <td class="py-2 px-3 text-right text-slate-700">${fmtUSD(d.value)}</td>
+                <td class="py-2 px-3 text-right text-slate-700">${fmtUSD(d.gross)}</td>
+                <td class="py-2 px-3">${d.openTasks > 0 ? `<span class="text-violet-600">${d.openTasks} ${d.openTasks===1?'task':'tasks'} open</span>` : '<span class="text-slate-400">0 tasks open</span>'}</td>
+                <td class="py-2 px-3">${d.nextDate ? `
+                  <div class="flex items-center gap-2">
+                    <div class="w-7 h-9 rounded-md bg-violet-50 border border-violet-200 flex flex-col items-center justify-center leading-none">
+                      <span class="text-[9px] text-violet-700 font-bold">${d.nextDate.m}</span>
+                      <span class="text-xs text-violet-700 font-bold">${d.nextDate.d}</span>
+                    </div>
+                    <span class="text-violet-600">${esc(d.nextDate.label)}</span>
+                  </div>` : ''}</td>
+                <td class="px-2 text-slate-400">⋯</td>
+              </tr>`).join('')}`;
+        }).join('')}
+      </tbody>
+    </table>`;
+}
+
+/* ── Modal open/close ────────────────────────────────────── */
+function openModal() {
+  document.getElementById('modal-overlay').style.display = 'flex';
+  const p = document.getElementById('pipeline-page');
+  p.style.filter = 'blur(2px)';
+  p.style.pointerEvents = 'none';
+}
+
+function closeModal() {
+  document.getElementById('modal-overlay').style.display = 'none';
+  const p = document.getElementById('pipeline-page');
+  p.style.filter = 'none';
+  p.style.pointerEvents = '';
+  D = null;
+}
+
+/* ── Create deal from extracted data ─────────────────────── */
+function createDeal() {
+  if (!D) return;
+
+  const newId  = Math.max(...DEALS.map(x => x.id)) + 1;
+  const ref    = 'AI-' + newId;
+  const title  = D.property_address || 'New Lease Deal';
+  const cityMatch = (D.property_address || '').match(/,\s*([^,]+,\s*[A-Z]{2}[\s\d]*)$/);
+  const city   = cityMatch ? cityMatch[1].trim() : '';
+  const dealType = document.getElementById('deal-sel').value || 'Lease';
+  const propType = D.prop_type ? (D.prop_type.charAt(0).toUpperCase() + D.prop_type.slice(1)) : 'Office';
+
+  // Build nextDate from commencement
+  let nextDate = null;
+  if (D.commencement_date) {
+    const parts = D.commencement_date.split('/');
+    if (parts.length === 3) {
+      const m = parseInt(parts[0]) - 1;
+      nextDate = { m: MONTHS[m], d: parseInt(parts[1]), label: 'Commencement' };
+    }
+  }
+
+  const deal = {
+    id: newId, ref, title, city, dealType, propType,
+    stage: 'pitching',
+    value: D.total_rent || 0,
+    gross: 0,
+    openTasks: 1,
+    nextDate,
+    alert: false,
+    sf: D.sqft ? parseInt(String(D.sqft).replace(/,/g,'')) : 0,
+    createdViaAI: true,
+  };
+
+  DEALS.push(deal);
+
+  // Close modal, unblur pipeline
+  document.getElementById('modal-overlay').style.display = 'none';
+  const p = document.getElementById('pipeline-page');
+  p.style.filter = 'none';
+  p.style.pointerEvents = '';
+
+  // Re-render with new deal highlighted
+  renderPipeline(newId);
+
+  // Scroll to deal row
+  setTimeout(() => {
+    const row = document.getElementById('deal-row-' + newId);
+    if (row) row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, 100);
+
+  // Toast
+  const src = document.getElementById('paste-input').value.trim();
+  const srcLabel = src.length > 40 ? src.substring(0, 40).replace(/\n.*/,'') + '…' : (src.split('\n')[0] || 'pasted content');
+  flashToast(`Deal ${ref} created from ${srcLabel}`);
+
+  D = null;
+}
+
+function flashToast(msg) {
+  const t = document.getElementById('toast');
+  document.getElementById('toast-msg').textContent = msg;
+  t.classList.remove('hide');
+  setTimeout(() => t.classList.add('hide'), 4000);
+}
+
+/* ── Sample texts ────────────────────────────────────────── */
+const SAMPLES = {
+  lease: `COMMERCIAL LEASE AGREEMENT
+
+This Lease Agreement is entered into as of January 1, 2025, between Landlord: ABC Properties LLC, with a mailing address at 100 Commerce Blvd, Chicago, IL 60601, and Tenant: XYZ Tech Corp, with a mailing address at 456 Wacker Dr, Chicago, IL 60606.
+
+Street Address: 730 Larrabee Road, Suite 204, Chicago, IL 60654
+Type of Space: Office
+Square Feet: 4,500 SF
+
+The Lease shall commence on February 1, 2025 and expiring on January 31, 2028, a period of 36 months.
+
+Tenant is obligated to pay $4,500.00 per month during the lease term.
+
+■ – TRIPLE NET (NNN): Tenant shall pay all operating expenses.
+
+Tenant is required to pay $9,000.00 as a security deposit prior to occupancy.`,
+
+  loi: `Subject: RE: LOI – 730 Larrabee Rd, Suite 204
+
+Hi Nick,
+
+Happy to confirm the key terms we discussed on the call:
+
+Premises: 730 Larrabee Road, Suite 204, Chicago IL 60654 — 4,500 SF Office
+Tenant: XYZ Tech Corp
+Landlord: ABC Properties LLC
+Commencement: February 1, 2025
+Expiration: January 31, 2028 (36 months)
+Monthly Rent: $4,500/month NNN
+Security Deposit: $9,000 (two months)
+
+Best, Tom Tenant`,
+
+  listing: `730 Larrabee Road | Suite 204 | Chicago, IL 60654
+
+OFFICE SPACE FOR LEASE — 4,500 SF | Floor 2
+Available: February 1, 2025 | Lease Term: 3 Years
+Monthly Rate: $4,500/month | Lease Type: NNN
+Landlord: ABC Properties LLC`,
+
+  voicemail: `Hey Nick, Tom at XYZ Tech. Calling about 730 Larrabee Road, Suite 204, Chicago. We want to move forward. Terms are $4,500/month NNN starting February 1st 2025, running 36 months through January 2028. Landlord is ABC Properties. Security deposit is $9,000. 4,500 square feet of office. Call me back.`
+};
+
+function loadSample(key) {
+  document.getElementById('paste-input').value = SAMPLES[key] || '';
+}
+
+/* ── Extraction state ────────────────────────────────────── */
 let D = null;
 
 ['agreement-sel','leasetype-sel','communit-sel'].forEach(id =>
   document.getElementById(id).addEventListener('change', () => { if(D) renderTransaction(); })
 );
-document.getElementById('broker-sel').addEventListener('change', () => {
-  if(D) renderBroker(document.getElementById('broker-sel').value);
-});
-document.getElementById('deal-sel').addEventListener('change', () => {
-  updateConditional();
-  if(D) renderTransaction();
-});
+document.getElementById('broker-sel').addEventListener('change', () => { if(D) renderTransaction(); });
+document.getElementById('deal-sel').addEventListener('change', () => { updateConditional(); if(D) renderTransaction(); });
 document.getElementById('sale-price-input').addEventListener('input', () => { if(D) renderTransaction(); });
 
 function updateConditional() {
@@ -285,12 +611,10 @@ function updateConditional() {
   const isLease = ['Lease','Tenant Rep'].includes(deal);
   document.getElementById('sale-price-group').classList.toggle('visible', isSale);
   document.getElementById('total-rent-group').classList.toggle('visible', isLease);
-  if (isLease && D && D.total_rent) {
+  if (isLease && D && D.total_rent)
     document.getElementById('total-rent-display').value = fm(D.total_rent);
-  }
 }
 
-// Public API: Claude can paste this snippet to load data programmatically
 window.loadLeaseData = function(data) {
   D = data;
   if (data.lease_type) {
@@ -298,14 +622,13 @@ window.loadLeaseData = function(data) {
     for (const o of lts.options) { if (o.value === data.lease_type) { lts.value = o.value; break; } }
   }
   if (!document.getElementById('deal-sel').value) document.getElementById('deal-sel').value = 'Lease';
-  updateConditional();
-  render(data);
-  setStatus('✓ Loaded — ' + (data.rent_schedule||[]).length + ' rent row' + ((data.rent_schedule||[]).length!==1?'s':'') + ' built');
+  updateConditional(); render(data);
+  setStatus('✓ Loaded — ' + (data.rent_schedule||[]).length + ' rows built');
 };
 
 function extractFromPaste() {
   const t = document.getElementById('paste-input').value.trim();
-  if (!t) { setStatus('Paste some lease text first.'); return; }
+  if (!t) { setStatus('Paste some content first.'); return; }
   setStatus('<span class="spinner"></span> Extracting…');
   setTimeout(() => {
     D = extract(t);
@@ -314,63 +637,52 @@ function extractFromPaste() {
       for (const o of lts.options) { if (o.value === D.lease_type) { lts.value = o.value; break; } }
     }
     if (!document.getElementById('deal-sel').value) document.getElementById('deal-sel').value = 'Lease';
-    updateConditional();
-    render(D);
+    updateConditional(); render(D);
     setStatus('✓ Done — ' + (D.rent_schedule||[]).length + ' rent row' + ((D.rent_schedule||[]).length!==1?'s':'') + ' built');
   }, 60);
 }
 
-function clearAll() {
-  D = null;
-  document.getElementById('paste-input').value = '';
-  document.getElementById('overview').style.display = 'none';
-  document.getElementById('selectors-panel').style.display = 'none';
-  ['agreement-sel','deal-sel','leasetype-sel','communit-sel','broker-sel'].forEach(id => document.getElementById(id).value = '');
-  document.getElementById('sale-price-input').value = '';
-  setStatus('');
-}
-
-// Core extraction
+/* ── Extraction engine ───────────────────────────────────── */
 function extract(rawText) {
   const t = rawText.replace(/\s+/g,' ');
-  const find = (pp) => { for(const p of pp){ const m=t.match(p); if(m) return (m[1]||m[0]).trim(); } return null; };
+  const find = pp => { for(const p of pp){ const m=t.match(p); if(m) return (m[1]||m[0]).trim(); } return null; };
 
-  const landlord = find([/Landlord\s+known\s+as\s+([A-Z][a-z]+(?:\s[A-Z][a-z]+)+)/,/Landlord[:\s]+([A-Za-z][\w\s,.'-]{2,40}?)(?:\s*,\s*with\s+a\s+mailing|\s+with\s+a\s+mailing)/i,/Lessor[:\s]+([^\n.?]{3,50}?)(?:\s+and\b|\.|,|$)/i]);
-  const tenant   = find([/Tenant\s+known\s+as\s+([A-Z][a-z]+(?:\s[A-Z][a-z]+)+)/,/Tenant[:\s]+([A-Za-z][\w\s,.'-]{2,40}?)(?:\s*,\s*with\s+a\s+mailing|\s+with\s+a\s+mailing)/i]);
-  const address  = find([/located\s+at\s+(\d+[^,\n]{5,60}(?:Street|St|Avenue|Ave|Blvd|Drive|Dr|Road|Rd|Lane|Ln|Way|Court|Ct)[^,\n]{0,30})/i,/Street\s+Address[:\s]+([^\n\r]{5,80}?)(?:\s*Square|\s*SF|\s*$)/i]);
-  const sqft     = find([/Square\s+Feet[:\s]*(\d[\d,]*)/i,/(\d[\d,]+)\s*SF\b/i]);
+  const landlord = find([/Landlord[:\s]+([A-Za-z][\w\s,.'-]{2,40}?)(?:\s*,\s*with\s+a\s+mailing|\s+with\s+a\s+mailing)/i,/Lessor[:\s]+([^\n.?]{3,50}?)(?:\s+and\b|\.|,|$)/i]);
+  const tenant   = find([/Tenant[:\s]+([A-Za-z][\w\s,.'-]{2,40}?)(?:\s*,\s*with\s+a\s+mailing|\s+with\s+a\s+mailing)/i]);
+  const address  = find([/Street\s+Address[:\s]+([^\n\r]{5,80}?)(?:\s*Square|\s*SF|\s*$)/i,/Premises[:\s]+([^\n\r]{5,80}?)(?:\s+—|\s*$)/i,/about\s+the\s+(\d+[^,\n]{5,60}(?:Road|Rd|Street|St|Ave)[^,\n]{0,20})/i,/located\s+at\s+(\d+[^,\n]{5,60}(?:Street|St|Ave|Road|Rd)[^,\n]{0,30})/i]);
+  const sqft     = find([/Square\s+Feet[:\s]*(\d[\d,]*)/i,/(\d[\d,]+)\s*(?:Square\s+Feet|SF)\b/i]);
   const propType = find([/Type\s+of\s+Space[:\s]+(\w[\w\s]*?)(?:\s*\(|\s*$)/i,/(office|retail|industrial|warehouse|medical|flex)/i]);
   const suite    = find([/[Ss]uite[.\s#]+([A-Z0-9\-]+)/,/[Uu]nit[.\s#]+([A-Z0-9\-]+)/]);
 
-  const commDate = extractDate(t,['commencing on','commence on','commencement date','start date']);
-  const expDate  = extractDate(t,['expiring at midnight on','expiring on','end date','end on']);
+  const commDate = extractDate(t,['commence on','commencement date','start date','Commencement:','Available:']);
+  const expDate  = extractDate(t,['expiring on','end date','Expiration:','through','running']);
   const termMonths = (() => {
-    const mo=t.match(/period\s+of\s+(\d+)\s+month/i),yr=t.match(/period\s+of\s+(\d+)\s+year/i)||t.match(/(\d+)[- ]year[s]?\s+(?:term|lease)/i);
+    const mo=t.match(/period\s+of\s+(\d+)\s+month/i)||t.match(/(\d+)\s+months/i);
+    const yr=t.match(/period\s+of\s+(\d+)\s+year/i)||t.match(/(\d+)[- ]year[s]?\s+(?:term|lease)/i)||t.match(/Lease\s+Term[:\s]+(\d+)\s+Year/i);
     if(mo)return parseInt(mo[1]); if(yr)return parseInt(yr[1])*12;
     if(commDate&&expDate)return monthsBetween(commDate,expDate); return null;
   })();
 
-  const flatRentM = t.match(/sum\s+of\s+\$([\d,]+(?:\.\d+)?)\s+per\s+month/i)||t.match(/obligated\s+to\s+pay\s+\$([\d,]+(?:\.\d+)?)\s+each\s+month/i)||t.match(/\$([\d,]+(?:\.\d+)?)\s+per\s+month/i)||t.match(/monthly\s+(?:base\s+)?rent[^$\d]{0,20}\$([\d,]+(?:\.\d+)?)/i);
+  const flatRentM = t.match(/obligated\s+to\s+pay\s+\$([\d,]+(?:\.\d+)?)\s+(?:each\s+month|per\s+month)/i)
+    || t.match(/\$([\d,]+(?:\.\d+)?)\s*\/month/i)
+    || t.match(/\$([\d,]+(?:\.\d+)?)\s+(?:a\s+month|per\s+month)/i)
+    || t.match(/Monthly\s+(?:Rate|Rent)[:\s]+\$([\d,]+(?:\.\d+)?)/i)
+    || t.match(/monthly\s+(?:base\s+)?rent[^$\d]{0,20}\$([\d,]+(?:\.\d+)?)/i);
   const flatRent = flatRentM ? parseFloat(flatRentM[1].replace(/,/g,'')) : null;
 
-  const firstAmt = parseW(t,['first three months','first 3 months']);
-  const highAmt  = parseW(t,['November.*March','November, December, January, February and March']);
-  const lowAmt   = parseW(t,['April.*October','April, May, June, July, August']);
-
-  const nnn = /■\s*[-–]\s*TRIPLE\s*NET/i.test(t)||/■\s*[-–]\s*NNN/i.test(t);
+  const nnn   = /■\s*[-–]\s*TRIPLE\s*NET/i.test(t)||/NNN\b/.test(t);
   const gross = /■\s*[-–]\s*GROSS\s*LEASE/i.test(t);
-  const mg = /■\s*[-–]\s*MODIFIED[- ]GROSS/i.test(t);
+  const mg    = /■\s*[-–]\s*MODIFIED[- ]GROSS/i.test(t);
   const ltRaw = nnn?'NNN':gross?'Gross':mg?'Modified Gross':find([/(Triple\s+Net|NNN)/i,/(Modified[- ]Gross)/i,/(Full\s+Service)/i,/(Ground\s+Lease)/i,/(Gross\s+Lease)/i]);
   const leaseType = ltRaw ? normLT(ltRaw) : null;
 
   const notReq = /Not\s+Required\s+to\s+Pay\s+a\s+Deposit/i.test(t);
-  const sdM = t.match(/required\s+to\s+pay\s+\$([\d,]+(?:\.\d+)?)/i);
+  const sdM = t.match(/security\s+deposit[^$\d]{0,30}\$([\d,]+(?:\.\d+)?)/i)
+    || t.match(/required\s+to\s+pay\s+\$([\d,]+(?:\.\d+)?)/i);
   const secDep = notReq ? null : (sdM ? '$'+sdM[1] : null);
 
   let rentSchedule = [];
-  if (firstAmt && highAmt && lowAmt && commDate) {
-    rentSchedule = buildSeasonal(firstAmt, highAmt, lowAmt, commDate, expDate);
-  } else if (flatRent && commDate && expDate) {
+  if (flatRent && commDate && expDate) {
     const months = termMonths || monthsBetween(commDate, expDate);
     rentSchedule = [{ start:commDate, end:expDate, monthly_rent:fm(flatRent), months, total:flatRent*months }];
   }
@@ -394,128 +706,97 @@ function extractDate(text, triggers) {
   return null;
 }
 
-function parseW(text, hints) {
-  const written = {one:1000,two:2000,three:3000,four:4000,five:5000};
-  for(const hint of hints){
-    const m1=text.match(new RegExp(hint+'[^$]{0,150}\\$(\\d[\\d,]+)','i'));if(m1)return'$'+m1[1];
-    const m2=text.match(new RegExp('\\$(\\d[\\d,]+)[^.]{0,150}?'+hint,'i'));if(m2)return'$'+m2[1];
-    for(const[word,num]of Object.entries(written)){
-      if(text.match(new RegExp(hint+'[^.]{0,200}?'+word+'\\s+thousand','i')))return'$'+num.toLocaleString();
-      if(text.match(new RegExp(word+'\\s+thousand[^.]{0,200}?'+hint,'i')))return'$'+num.toLocaleString();
-    }
-  }
-  return null;
-}
-
-function buildSeasonal(intro,high,low,commDate,expDate) {
-  const rows=[],start=new Date(commDate),end=expDate?new Date(expDate):null;
-  rows.push({start:commDate,end:fmtD(new Date(start.getFullYear(),9,31)),monthly_rent:intro});
-  let yr=start.getFullYear();
-  for(let i=0;i<20;i++){
-    const hS=new Date(yr,10,1),hE=new Date(yr+1,2,31),lS=new Date(yr+1,3,1),lE=new Date(yr+1,9,31);
-    if(end&&hS>=end)break;
-    rows.push({start:fmtD(hS),end:fmtD(end&&hE>end?end:hE),monthly_rent:high});
-    if(end&&lS>=end)break;
-    rows.push({start:fmtD(lS),end:fmtD(end&&lE>end?end:lE),monthly_rent:low});
-    yr++;
-    if(end&&new Date(yr,10,1)>end)break;
-  }
-  return rows.map(r=>{const m=monthsBetween(r.start,r.end),rate=parseFloat(r.monthly_rent.replace(/[$,]/g,''));return{...r,months:m,total:rate*m};});
-}
-
 function monthsBetween(s,e){const a=new Date(s),b=new Date(e);if(isNaN(a)||isNaN(b))return null;return Math.round((b-a)/(1000*60*60*24*30.4375));}
 function fmtD(d){return(d.getMonth()+1).toString().padStart(2,'0')+'/'+d.getDate().toString().padStart(2,'0')+'/'+d.getFullYear();}
 function fm(n){if(n===null||n===undefined)return'—';return'$'+Number(n).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});}
 function normLT(v){const u=v.toUpperCase();if(u.includes('TRIPLE')||u.includes('NNN'))return'NNN';if(u.includes('MODIFIED GROSS'))return'Modified Gross';if(u.includes('MODIFIED NET'))return'Modified Net';if(u.includes('FULL'))return'Full Service';if(u.includes('GROUND'))return'Ground Lease';if(u.includes('GROSS'))return'Gross';return v;}
-function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 function setStatus(html){document.getElementById('status').innerHTML=html;}
 
+/* ── Render extracted fields ─────────────────────────────── */
 function render(d) {
-  renderBroker(document.getElementById('broker-sel').value);
-  renderProperty(d);
-  renderTransaction();
-  renderRentSchedule(d);
-  document.getElementById('selectors-panel').style.display = 'block';
-  document.getElementById('overview').style.display = 'block';
-}
-
-function renderBroker(name) {
-  const b = document.getElementById('ibody');
-  if (!name) { b.innerHTML = '<div class="empty-broker"><div class="ei">👤</div><p>No brokers have been added.</p></div>'; return; }
-  const ini = name.split(/\s+/).filter(Boolean).slice(0,2).map(w=>w[0].toUpperCase()).join('');
-  b.innerHTML = `<div class="broker-card"><div class="b-avatar">${ini}</div><div class="b-info"><div class="b-label">Primary Broker</div><div class="b-name">${esc(name)}</div></div><div class="b-comm"><div class="b-ring">0%</div><div><div class="b-amt">$0.00</div><div class="b-lbl">Gross Commission</div></div></div></div>`;
+  renderProperty(d); renderTransaction(); renderRentSchedule(d);
+  document.getElementById('empty-state').style.display = 'none';
+  document.getElementById('overview-pane').style.display = 'block';
+  const btn = document.getElementById('create-btn');
+  btn.disabled = false;
+  btn.className = 'text-sm px-4 py-1.5 rounded-md font-medium bg-violet-500 hover:bg-violet-600 text-white cursor-pointer transition-colors';
 }
 
 function renderProperty(d) {
   document.getElementById('pf').innerHTML = [
     fr('Property Type', d.prop_type),
-    fr('Address', d.property_address),
-    fr('Address 2', d.suite),
-    fr('Building Size (SF)', d.sqft ? Number(String(d.sqft).replace(/,/g,'')).toLocaleString() + ' SF' : null),
-    fr('Tenant', d.tenant_name),
-    fr('Landlord', d.landlord_name),
+    fr('Address',       d.property_address),
+    fr('Suite / Unit',  d.suite),
+    fr('Building Size', d.sqft ? Number(String(d.sqft).replace(/,/g,'')).toLocaleString()+' SF' : null),
+    fr('Tenant',        d.tenant_name),
+    fr('Landlord',      d.landlord_name),
   ].join('');
 }
 
 function renderTransaction() {
   if (!D) return;
-  const agType = document.getElementById('agreement-sel').value;
-  const dealType = document.getElementById('deal-sel').value;
-  const ltSel = document.getElementById('leasetype-sel').value || D.lease_type;
+  const agType    = document.getElementById('agreement-sel').value;
+  const dealType  = document.getElementById('deal-sel').value;
+  const ltSel     = document.getElementById('leasetype-sel').value || D.lease_type;
   const commUnits = document.getElementById('communit-sel').value;
-  const isSale = dealType === 'Sale';
-  const isLease = ['Lease','Tenant Rep'].includes(dealType);
-  const salePrice = isSale ? (document.getElementById('sale-price-input').value.trim() || null) : null;
-  const totalRentV = isLease ? (D.total_rent ? fm(D.total_rent) : null) : null;
+  const isSale    = dealType === 'Sale';
+  const isLease   = ['Lease','Tenant Rep'].includes(dealType);
 
   document.getElementById('tf').innerHTML = [
-    fr('Agreement Type', agType ? bdg(agType, {New:'green',Renewal:'blue',Expansion:'purple',Sublease:'amber'}) : null),
-    fr('Deal Type', dealType ? bdg(dealType, {Sale:'green',Lease:'blue','Tenant Rep':'purple','Buyer Rep':'amber'}) : null),
-    fr('Lease Type', ltSel ? bdg(ltSel, {NNN:'amber','NNN (Triple Net)':'amber',Gross:'blue','Modified Gross':'purple','Full Service':'green','Ground Lease':'green'}) : null),
-    fr('Commission Units', commUnits ? `<span class="badge">${esc(commUnits)}</span>` : null),
-    isSale ? frHi('Sale Price', salePrice || '—') : '',
-    isLease ? frHi('Total Rent', totalRentV || '—') : '',
-    fr('Avg Lease Rate', D.avg_rate ? '$' + D.avg_rate + ' ($/SF/Year)' : null),
-    fr('Lease Term', D.term_months ? D.term_months + ' Months' : null),
-    fr('Commencement', D.commencement_date),
-    fr('Expiration', D.expiration_date),
-    fr('Security Deposit', D.security_deposit || 'None required'),
-    fr('Commission %', '—'),
-    fr('Commission $', '$0.00'),
+    fr('Agreement Type',   agType   ? bdg(agType,   {New:'green',Renewal:'blue',Expansion:'purple',Sublease:'amber'}) : null),
+    fr('Deal Type',        dealType ? bdg(dealType, {Sale:'green',Lease:'blue','Tenant Rep':'purple','Buyer Rep':'amber'}) : null),
+    fr('Lease Type',       ltSel    ? bdg(ltSel,    {NNN:'amber','NNN (Triple Net)':'amber',Gross:'blue','Modified Gross':'purple','Full Service':'green','Ground Lease':'green'}) : null),
+    fr('Commission Units', commUnits ? `<span class="inline-flex px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-600">${esc(commUnits)}</span>` : null),
+    isSale  ? frHi('Sale Price', document.getElementById('sale-price-input').value.trim() || '—') : '',
+    isLease ? frHi('Total Rent', D.total_rent ? fm(D.total_rent) : '—') : '',
+    fr('Avg Lease Rate',  D.avg_rate ? '$'+D.avg_rate+' /SF/Yr' : null),
+    fr('Lease Term',      D.term_months ? D.term_months+' Months' : null),
+    fr('Commencement',    D.commencement_date),
+    fr('Expiration',      D.expiration_date),
+    fr('Security Deposit',D.security_deposit || 'None required'),
+    fr('Commission %', '—'), fr('Commission $', '$0.00'),
   ].join('');
 }
 
 function renderRentSchedule(d) {
-  const rb = document.getElementById('rb');
-  rb.innerHTML = '';
+  const rb  = document.getElementById('rb');
   const sch = d.rent_schedule || [];
-  if (!sch.length) { rb.innerHTML = '<tr><td colspan="8" class="empty-note">No rent schedule found.</td></tr>'; return; }
-  for (const row of sch) {
-    const rate = parseFloat((row.monthly_rent || '').replace(/[$,]/g, ''));
-    rb.innerHTML += `<tr><td>${esc(row.start)}</td><td>${esc(row.end)}</td><td class="ctr">${row.months ?? '—'}</td><td class="num">${isNaN(rate) ? '—' : fm(rate)}</td><td class="num">${row.total ? fm(row.total) : '—'}</td><td class="ctr">0%</td><td class="num">$0.00</td><td></td></tr>`;
+  if (!sch.length) {
+    rb.innerHTML = '<tr><td colspan="7" class="px-4 py-5 text-center text-slate-400 text-sm">No rent schedule found.</td></tr>';
+    document.getElementById('rs-foot').style.display = 'none';
+    document.getElementById('rs-badge').classList.add('hidden'); return;
   }
+  rb.innerHTML = sch.map(row => {
+    const rate = parseFloat((row.monthly_rent||'').replace(/[$,]/g,''));
+    return `<tr class="border-t border-slate-100 hover:bg-slate-50">
+      <td class="px-4 py-2 tabular-nums text-sm">${esc(row.start)}</td>
+      <td class="px-4 py-2 tabular-nums text-sm">${esc(row.end)}</td>
+      <td class="px-3 py-2 text-center text-slate-500 tabular-nums text-sm">${row.months??'—'}</td>
+      <td class="px-4 py-2 text-right tabular-nums font-medium text-sm">${isNaN(rate)?'—':fm(rate)}</td>
+      <td class="px-4 py-2 text-right tabular-nums text-sm">${row.total?fm(row.total):'—'}</td>
+      <td class="px-3 py-2 text-center text-slate-400 tabular-nums text-sm">0%</td>
+      <td class="px-4 py-2 text-right tabular-nums text-slate-400 text-sm">$0.00</td>
+    </tr>`;
+  }).join('');
+  document.getElementById('rs-total').textContent = fm(sch.reduce((s,r)=>s+(r.total||0),0));
+  document.getElementById('rs-foot').style.display = '';
+  const badge = document.getElementById('rs-badge');
+  badge.textContent = sch.length+' row'+(sch.length!==1?'s':'');
+  badge.classList.remove('hidden');
 }
 
-function fr(l, v) { const isH = typeof v === 'string' && v.startsWith('<'); const d = isH ? v : (v ? esc(String(v)) : null); return `<div class="field-row"><span class="field-label">${l}</span><span class="field-value${d ? '' : ' empty'}">${d || '—'}</span></div>`; }
-function frHi(l, v) { return `<div class="field-row"><span class="field-label">${l}</span><span class="field-value hi">${v || '—'}</span></div>`; }
-function bdg(val, cm) { const cls = cm[val] || ''; return `<span class="badge ${cls}">${esc(val)}</span>`; }
+function fr(l,v){const isH=typeof v==='string'&&v.startsWith('<');const d=isH?v:(v?esc(String(v)):null);return`<dt class="text-slate-500">${l}</dt><dd class="${d?'text-slate-800':'text-slate-300'}">${d||'—'}</dd>`;}
+function frHi(l,v){return`<dt class="text-slate-500">${l}</dt><dd class="font-semibold text-violet-700">${v||'—'}</dd>`;}
+function bdg(val,cm){const c={green:'bg-emerald-50 text-emerald-700',blue:'bg-sky-50 text-sky-700',purple:'bg-violet-100 text-violet-700',amber:'bg-amber-50 text-amber-700'};return`<span class="inline-flex px-2 py-0.5 rounded text-xs font-medium ${c[cm[val]]||'bg-slate-100 text-slate-600'}">${esc(val)}</span>`;}
 
-function getCSV() {
-  if (!D) return '';
-  const broker = document.getElementById('broker-sel').value;
-  const agType = document.getElementById('agreement-sel').value;
-  const dealType = document.getElementById('deal-sel').value;
-  const ltSel = document.getElementById('leasetype-sel').value;
-  const commUnits = document.getElementById('communit-sel').value;
-  const isSale = dealType === 'Sale';
-  const isLease = ['Lease','Tenant Rep'].includes(dealType);
-  const h = ['Landlord Name','Tenant Name','Property Address','Lease Start Date','Lease Expiration Date','Agreement Type','Deal Type','Lease Type','Commission Units','Sale Price','Total Rent','Lease Term (Months)','Security Deposit','Primary Broker'];
-  const r = [D.landlord_name, D.tenant_name, D.property_address, D.commencement_date, D.expiration_date, agType, dealType, ltSel || D.lease_type, commUnits, isSale ? document.getElementById('sale-price-input').value.trim() : null, isLease && D.total_rent ? fm(D.total_rent) : null, D.term_months, D.security_deposit || 'None', broker || null].map(v => v ? `"${String(v).replace(/"/g,'""')}"` : '');
-  return [h.join(','), r.join(',')].join('\n');
-}
+/* ── CSV ─────────────────────────────────────────────────── */
+function getCSV(){if(!D)return'';const broker=document.getElementById('broker-sel').value,agType=document.getElementById('agreement-sel').value,dealType=document.getElementById('deal-sel').value,ltSel=document.getElementById('leasetype-sel').value,commUnits=document.getElementById('communit-sel').value,isSale=dealType==='Sale',isLease=['Lease','Tenant Rep'].includes(dealType);const h=['Landlord Name','Tenant Name','Property Address','Lease Start Date','Lease Expiration Date','Agreement Type','Deal Type','Lease Type','Commission Units','Sale Price','Total Rent','Lease Term (Months)','Security Deposit','Primary Broker'];const r=[D.landlord_name,D.tenant_name,D.property_address,D.commencement_date,D.expiration_date,agType,dealType,ltSel||D.lease_type,commUnits,isSale?document.getElementById('sale-price-input').value.trim():null,isLease&&D.total_rent?fm(D.total_rent):null,D.term_months,D.security_deposit||'None',broker||null].map(v=>v?`"${String(v).replace(/"/g,'""')}"` : '');return[h.join(','),r.join(',')].join('\n');}
+function copyCSV(){if(!D){setStatus('Extract first.');return;}navigator.clipboard.writeText(getCSV()).then(()=>setStatus('✓ CSV copied')).catch(()=>setStatus('Copy failed'));}
+function downloadCSV(){if(!D){setStatus('Extract first.');return;}const b=new Blob([getCSV()],{type:'text/csv'});const u=URL.createObjectURL(b);const a=document.createElement('a');a.href=u;a.download='lease_export.csv';a.click();URL.revokeObjectURL(u);}
 
-function copyCSV() { if (!D) { setStatus('No data yet.'); return; } navigator.clipboard.writeText(getCSV()).then(() => setStatus('✓ CSV copied')).catch(() => setStatus('Copy failed')); }
-function downloadCSV() { if (!D) { setStatus('No data yet.'); return; } const b = new Blob([getCSV()], {type:'text/csv'}); const u = URL.createObjectURL(b); const a = document.createElement('a'); a.href = u; a.download = 'lease_export.csv'; a.click(); URL.revokeObjectURL(u); }
+/* ── Init ────────────────────────────────────────────────── */
+renderPipeline();
 </script>
 </body>
 </html>
