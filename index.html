@@ -158,24 +158,43 @@
         <!-- LEFT: Input -->
         <div class="w-[320px] shrink-0 border-r border-slate-200 p-5 flex flex-col gap-3 overflow-y-auto">
           <!-- PDF drop zone -->
-          <div class="border-2 border-dashed border-violet-300 rounded-lg p-4" style="background:#f5f3ff40">
-            <div class="flex items-center gap-2 font-medium text-sm mb-2">
-              Drop a lease PDF here
-              <span class="bg-violet-100 text-violet-700 text-[9px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider">Rent Schedule</span>
-            </div>
-            <div class="flex items-start gap-3">
-              <div class="ai-grad w-9 h-9 rounded-lg flex items-center justify-center shrink-0">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.8"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+          <div id="pdf-drop-zone" class="border-2 border-dashed border-violet-300 rounded-lg p-4 transition-colors" style="background:#f5f3ff40"
+            ondragover="event.preventDefault();this.classList.add('border-violet-500')"
+            ondragleave="this.classList.remove('border-violet-500')"
+            ondrop="event.preventDefault();this.classList.remove('border-violet-500');const f=event.dataTransfer.files[0];if(f?.type==='application/pdf')processPDF(f);else setStatus('Please drop a PDF file.')">
+            <div id="pdf-zone-inner">
+              <div class="flex items-center gap-2 font-medium text-sm mb-2">
+                Drop a lease PDF here
+                <span class="bg-violet-100 text-violet-700 text-[9px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider">Rent Schedule</span>
               </div>
-              <p class="text-xs text-slate-500 flex-1 leading-relaxed">AI reads the PDF in your browser — pulls landlord, tenant, dates, lease type, security deposit, and the full rent schedule.</p>
-            </div>
-            <div class="mt-3">
-              <input type="file" id="pdf-input" accept=".pdf" class="hidden">
-              <button onclick="document.getElementById('pdf-input').click()" class="border border-slate-300 bg-white hover:bg-slate-50 rounded px-3 py-1.5 text-xs font-medium">Choose PDF</button>
+              <div class="flex items-start gap-3">
+                <div class="ai-grad w-9 h-9 rounded-lg flex items-center justify-center shrink-0">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.8"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+                </div>
+                <p class="text-xs text-slate-500 flex-1 leading-relaxed">AI reads the PDF — pulls landlord, tenant, address, rent schedule, and all lease terms.</p>
+              </div>
+              <div class="mt-3 flex items-center gap-2">
+                <input type="file" id="pdf-input" accept=".pdf" class="hidden">
+                <button onclick="document.getElementById('pdf-input').click()" class="border border-slate-300 bg-white hover:bg-slate-50 rounded px-3 py-1.5 text-xs font-medium">Choose PDF</button>
+              </div>
             </div>
           </div>
 
-          <p class="text-[11px] text-violet-600 leading-relaxed">Prototype demo: any dropped PDF loads sample lease text below. Production version will run OCR + LLM server-side.</p>
+          <!-- API key -->
+          <div class="border border-slate-200 rounded-lg p-3 bg-slate-50">
+            <div class="flex items-center gap-1.5 mb-2">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-slate-400 shrink-0"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
+              <span class="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Anthropic API Key</span>
+              <span id="key-active-badge" class="ml-auto text-[10px] text-emerald-600 font-medium" style="display:none">✓ Active</span>
+            </div>
+            <div class="flex gap-1.5">
+              <input id="api-key-input" type="password" placeholder="sk-ant-api03-…" autocomplete="off"
+                onkeydown="if(event.key==='Enter')saveApiKey()"
+                class="flex-1 border border-slate-200 rounded px-2 py-1.5 text-xs font-mono bg-white focus:outline-none focus:ring-1 focus:ring-violet-400">
+              <button onclick="saveApiKey()" class="border border-violet-300 text-violet-600 hover:bg-violet-50 rounded px-2.5 py-1.5 text-xs font-medium whitespace-nowrap">Save</button>
+            </div>
+            <p class="text-[10px] text-slate-400 mt-1.5">Stored in your browser only — never sent to our servers.</p>
+          </div>
 
           <div class="flex items-center gap-2 text-slate-400 text-[10px] uppercase tracking-wider">
             <div class="flex-1 h-px bg-slate-200"></div>or paste content<div class="flex-1 h-px bg-slate-200"></div>
@@ -487,9 +506,9 @@ function createDeal() {
 
   const newId  = Math.max(...DEALS.map(x => x.id)) + 1;
   const ref    = 'AI-' + newId;
-  const title  = D.property_address || 'New Lease Deal';
-  const cityMatch = (D.property_address || '').match(/,\s*([^,]+,\s*[A-Z]{2}[\s\d]*)$/);
-  const city   = cityMatch ? cityMatch[1].trim() : '';
+  const title  = [D.address || D.property_address, D.address2].filter(Boolean).join(', ') || 'New Lease Deal';
+  const city   = D.city ? (D.state ? `${D.city}, ${D.state}` : D.city)
+    : ((D.property_address || '').match(/,\s*([^,]+,\s*[A-Z]{2}[\s\d]*)$/) || [])[1]?.trim() || '';
   const dealType = document.getElementById('deal-sel').value || 'Lease';
   const propType = D.prop_type ? (D.prop_type.charAt(0).toUpperCase() + D.prop_type.slice(1)) : 'Office';
 
@@ -533,8 +552,10 @@ function createDeal() {
   }, 100);
 
   // Toast
-  const src = document.getElementById('paste-input').value.trim();
-  const srcLabel = src.length > 40 ? src.substring(0, 40).replace(/\n.*/,'') + '…' : (src.split('\n')[0] || 'pasted content');
+  const srcLabel = window._pdfFilename
+    ? window._pdfFilename.replace(/\.pdf$/i, '')
+    : (() => { const s = document.getElementById('paste-input').value.trim(); return s.length > 40 ? s.substring(0,40).replace(/\n.*/,'')+'…' : (s.split('\n')[0]||'pasted content'); })();
+  window._pdfFilename = null;
   flashToast(`Deal ${ref} created from ${srcLabel}`);
 
   D = null;
@@ -629,6 +650,7 @@ window.loadLeaseData = function(data) {
 function extractFromPaste() {
   const t = document.getElementById('paste-input').value.trim();
   if (!t) { setStatus('Paste some content first.'); return; }
+  if (getApiKey()) { extractWithClaude(t, null); return; }
   setStatus('<span class="spinner"></span> Extracting…');
   setTimeout(() => {
     D = extract(t);
@@ -724,10 +746,13 @@ function render(d) {
 }
 
 function renderProperty(d) {
+  const cityStateZip = [d.city, [d.state, d.zip].filter(Boolean).join(' ')].filter(Boolean).join(', ');
   document.getElementById('pf').innerHTML = [
     fr('Property Type', d.prop_type),
-    fr('Address',       d.property_address),
-    fr('Suite / Unit',  d.suite),
+    fr('Address',       d.address || d.property_address),
+    d.address2 ? fr('Address 2',    d.address2) : '',
+    d.city     ? fr('City',         d.city) : '',
+    (d.state || d.zip) ? fr('State / Zip', [d.state, d.zip].filter(Boolean).join('  ')) : '',
     fr('Building Size', d.sqft ? Number(String(d.sqft).replace(/,/g,'')).toLocaleString()+' SF' : null),
     fr('Tenant',        d.tenant_name),
     fr('Landlord',      d.landlord_name),
@@ -750,8 +775,12 @@ function renderTransaction() {
     fr('Commission Units', commUnits ? `<span class="inline-flex px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-600">${esc(commUnits)}</span>` : null),
     isSale  ? frHi('Sale Price', document.getElementById('sale-price-input').value.trim() || '—') : '',
     isLease ? frHi('Total Rent', D.total_rent ? fm(D.total_rent) : '—') : '',
-    fr('Avg Lease Rate',  D.avg_rate ? '$'+D.avg_rate+' /SF/Yr' : null),
-    fr('Lease Term',      D.term_months ? D.term_months+' Months' : null),
+    fr('Avg Lease Rate',  D.avg_lease_rate != null
+      ? fm(D.avg_lease_rate) + ' ' + (D.avg_lease_rate_units || '/SF/Yr')
+      : (D.avg_rate ? '$'+D.avg_rate+' /SF/Yr' : null)),
+    fr('Lease Term', D.lease_term != null
+      ? D.lease_term + ' ' + (D.lease_term_units || 'Months')
+      : (D.term_months ? D.term_months+' Months' : null)),
     fr('Commencement',    D.commencement_date),
     fr('Expiration',      D.expiration_date),
     fr('Security Deposit',D.security_deposit || 'None required'),
@@ -795,8 +824,191 @@ function getCSV(){if(!D)return'';const broker=document.getElementById('broker-se
 function copyCSV(){if(!D){setStatus('Extract first.');return;}navigator.clipboard.writeText(getCSV()).then(()=>setStatus('✓ CSV copied')).catch(()=>setStatus('Copy failed'));}
 function downloadCSV(){if(!D){setStatus('Extract first.');return;}const b=new Blob([getCSV()],{type:'text/csv'});const u=URL.createObjectURL(b);const a=document.createElement('a');a.href=u;a.download='lease_export.csv';a.click();URL.revokeObjectURL(u);}
 
+/* ── API key management ──────────────────────────────────── */
+function getApiKey() { return localStorage.getItem('bp_anthropic_key') || ''; }
+
+function saveApiKey() {
+  const val = document.getElementById('api-key-input').value.trim();
+  if (!val) return;
+  localStorage.setItem('bp_anthropic_key', val);
+  document.getElementById('api-key-input').value = '';
+  document.getElementById('api-key-input').placeholder = '••••••••••••••••••••';
+  const badge = document.getElementById('key-active-badge');
+  badge.style.display = '';
+  setStatus('✓ API key saved');
+  setTimeout(() => setStatus(''), 2000);
+}
+
+function initApiKey() {
+  if (getApiKey()) {
+    document.getElementById('api-key-input').placeholder = '••••••••••••••••••••';
+    document.getElementById('key-active-badge').style.display = '';
+  }
+}
+
+/* ── PDF processing via Claude API ──────────────────────── */
+const EXTRACT_PROMPT = `Extract all fields from this commercial lease agreement. Return ONLY a valid JSON object — no markdown fences, no explanation:
+{"landlord_name":"","tenant_name":"","address":"street number and name only","address2":"suite/unit/floor or null","city":"","state":"XX","zip":"","prop_type":"Office","sqft":null,"commencement_date":"MM/DD/YYYY","expiration_date":"MM/DD/YYYY","lease_term":12,"lease_term_units":"Months","lease_type":"NNN","security_deposit":null,"avg_lease_rate":4500,"avg_lease_rate_units":"Monthly Rent","total_rent":54000,"rent_schedule":[{"start":"MM/DD/YYYY","end":"MM/DD/YYYY","monthly_rent":"$4,500.00","months":12,"total":54000}]}
+avg_lease_rate_units options: "Monthly Rent" (flat $/mo), "Annual Rent" (flat $/yr), "$/SF/Month", "$/SF/Year".
+rent_schedule: one row per period for step-up rents; one row for flat rent.`;
+
+async function processPDF(file) {
+  const key = getApiKey();
+  if (!key) {
+    setStatus('Add an Anthropic API key above to process PDFs.');
+    document.getElementById('api-key-input').focus();
+    return;
+  }
+
+  document.getElementById('pdf-zone-inner').innerHTML = `
+    <div class="flex items-center gap-3 py-1">
+      <span class="spinner"></span>
+      <div class="min-w-0">
+        <div class="font-medium text-sm text-slate-700 truncate" style="max-width:220px">${esc(file.name)}</div>
+        <div class="text-xs text-slate-500">Extracting with Claude AI…</div>
+      </div>
+    </div>`;
+  setStatus('');
+
+  try {
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    let binary = '';
+    for (let i = 0; i < bytes.length; i += 8192)
+      binary += String.fromCharCode(...bytes.subarray(i, Math.min(i + 8192, bytes.length)));
+    const base64 = btoa(binary);
+
+    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'x-api-key': key,
+        'anthropic-version': '2023-06-01',
+        'content-type': 'application/json',
+        'anthropic-dangerous-client-side-key-access': 'buildout-demo'
+      },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 2048,
+        messages: [{ role: 'user', content: [
+          { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: base64 } },
+          { type: 'text', text: EXTRACT_PROMPT }
+        ]}]
+      })
+    });
+
+    if (!resp.ok) {
+      const e = await resp.json().catch(() => ({}));
+      throw new Error(e.error?.message || `API error ${resp.status}`);
+    }
+
+    const apiData = await resp.json();
+    const raw = apiData.content?.[0]?.text || '';
+    const match = raw.match(/\{[\s\S]*\}/);
+    if (!match) throw new Error('No JSON in Claude response');
+    const extracted = JSON.parse(match[0]);
+
+    loadPDFData(extracted, file.name);
+
+    const rowCount = (D?.rent_schedule?.length || 0);
+    document.getElementById('pdf-zone-inner').innerHTML = `
+      <div class="flex items-center gap-3 py-1">
+        <div class="w-8 h-8 rounded bg-emerald-50 border border-emerald-200 flex items-center justify-center shrink-0">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#059669" stroke-width="2.5"><path d="M5 13l4 4 10-10"/></svg>
+        </div>
+        <div class="flex-1 min-w-0">
+          <div class="font-medium text-sm text-slate-700 truncate" style="max-width:180px">${esc(file.name)}</div>
+          <div class="text-xs text-emerald-600">${rowCount} rent row${rowCount !== 1 ? 's' : ''} extracted</div>
+        </div>
+        <button onclick="document.getElementById('pdf-input').click()" class="text-xs text-violet-600 hover:underline shrink-0">Replace</button>
+      </div>`;
+
+  } catch (err) {
+    document.getElementById('pdf-zone-inner').innerHTML = `
+      <div class="flex items-center gap-2 py-1 text-rose-600 text-xs">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+        ${esc(err.message)}
+        <button onclick="document.getElementById('pdf-input').click()" class="ml-auto text-violet-600 hover:underline">Try again</button>
+      </div>`;
+    setStatus('');
+  }
+}
+
+function loadPDFData(d, filename) {
+  // Build property_address for backward compat
+  const streetParts = [d.address, d.address2].filter(Boolean);
+  const cityLine = [d.city, d.state, d.zip].filter(Boolean).join(' ');
+  d.property_address = [...streetParts, cityLine].filter(Boolean).join(', ');
+
+  // Normalize term to months for backward compat
+  d.term_months = d.lease_term_units === 'Years'
+    ? (d.lease_term || 0) * 12
+    : (d.lease_term || null);
+
+  // Suite from address2
+  d.suite = d.address2 || null;
+
+  // security_deposit as formatted string
+  if (typeof d.security_deposit === 'number' && d.security_deposit > 0)
+    d.security_deposit = fm(d.security_deposit);
+  else if (!d.security_deposit)
+    d.security_deposit = null;
+
+  window._pdfFilename = filename;
+  window.loadLeaseData(d);
+}
+
+async function extractWithClaude(text, source) {
+  const key = getApiKey();
+  if (!key) { return; }
+  setStatus('<span class="spinner"></span> Extracting with AI…');
+  try {
+    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'x-api-key': key,
+        'anthropic-version': '2023-06-01',
+        'content-type': 'application/json',
+        'anthropic-dangerous-client-side-key-access': 'buildout-demo'
+      },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 2048,
+        messages: [{ role: 'user', content: EXTRACT_PROMPT + '\n\nLEASE TEXT:\n' + text.substring(0, 12000) }]
+      })
+    });
+    if (!resp.ok) {
+      const e = await resp.json().catch(() => ({}));
+      throw new Error(e.error?.message || `HTTP ${resp.status}`);
+    }
+    const apiData = await resp.json();
+    const raw = apiData.content?.[0]?.text || '';
+    const match = raw.match(/\{[\s\S]*\}/);
+    if (!match) throw new Error('No JSON in response');
+    const extracted = JSON.parse(match[0]);
+    if (source) window._pdfFilename = source;
+    loadPDFData(extracted, source);
+    setStatus('✓ Extracted — ' + (D?.rent_schedule?.length || 0) + ' rent rows');
+  } catch (err) {
+    setStatus('AI error: ' + err.message + ' — falling back to text extraction');
+    // fallback to regex
+    D = extract(document.getElementById('paste-input').value.trim());
+    if (D.lease_type) {
+      const lts = document.getElementById('leasetype-sel');
+      for (const o of lts.options) { if (o.value === D.lease_type) { lts.value = o.value; break; } }
+    }
+    if (!document.getElementById('deal-sel').value) document.getElementById('deal-sel').value = 'Lease';
+    updateConditional(); render(D);
+  }
+}
+
 /* ── Init ────────────────────────────────────────────────── */
+document.getElementById('pdf-input').addEventListener('change', function() {
+  const f = this.files[0];
+  if (f) processPDF(f);
+  this.value = '';
+});
+
 renderPipeline();
+initApiKey();
 </script>
 </body>
 </html>
