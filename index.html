@@ -877,13 +877,11 @@ async function processPDF(file) {
       binary += String.fromCharCode(...bytes.subarray(i, Math.min(i + 8192, bytes.length)));
     const base64 = btoa(binary);
 
-    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+    const resp = await fetch('/api/anthropic', {
       method: 'POST',
       headers: {
-        'x-api-key': key,
-        'anthropic-version': '2023-06-01',
-        'content-type': 'application/json',
-        'anthropic-dangerous-client-side-key-access': 'true'
+        'X-Api-Key': key,
+        'content-type': 'application/json'
       },
       body: JSON.stringify({
         model: 'claude-haiku-4-5-20251001',
@@ -981,13 +979,11 @@ async function extractWithClaude(text, source) {
   if (!key) { return; }
   setStatus('<span class="spinner"></span> Extracting with AI…');
   try {
-    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+    const resp = await fetch('/api/anthropic', {
       method: 'POST',
       headers: {
-        'x-api-key': key,
-        'anthropic-version': '2023-06-01',
-        'content-type': 'application/json',
-        'anthropic-dangerous-client-side-key-access': 'true'
+        'X-Api-Key': key,
+        'content-type': 'application/json'
       },
       body: JSON.stringify({
         model: 'claude-haiku-4-5-20251001',
