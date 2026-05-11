@@ -56,6 +56,22 @@
   .anim-fadein { animation:fadein .2s ease-out; }
   @keyframes fadein { from{opacity:0;transform:translateY(3px);}to{opacity:1;transform:none;} }
 
+  /* Kanban board */
+  .kanban-card { transition: box-shadow .15s, transform .15s; }
+  .kanban-card.dragging { opacity:.4; transform:rotate(-1deg); }
+  .kanban-col.dropping { background:#eef0fa !important; }
+  .health-bar { height:4px; border-radius:2px; background:#e2e8f0; overflow:hidden; }
+  .health-bar > div { height:4px; border-radius:2px; }
+  .dead-zone { max-height:0; opacity:0; overflow:hidden; transition:max-height .28s cubic-bezier(.2,.7,.3,1.2),opacity .18s,margin-top .28s; margin-top:0; }
+  .dead-zone.visible { max-height:120px; opacity:1; margin-top:10px; }
+  .dead-zone .dead-target { border:2px dashed #f4a8b1; background:#fff5f6; color:#b91c47; transition:background .15s,border-color .15s; }
+  .dead-zone.dropping .dead-target { background:#ffe4e8; border-color:#e11d48; }
+  .stage-bar-pitch { background:#DCEDFF; }
+  .stage-bar-eval  { background:#ECE0F5; }
+  .stage-bar-trans { background:#FFEFD0; }
+  .stage-bar-close { background:#D8F1DD; }
+  .stage-bar-dead  { background:#EEEEF1; }
+
   /* Toast */
   #toast { transition: opacity .3s, transform .3s; }
   #toast.hide { opacity:0; transform:translateY(12px); pointer-events:none; }
@@ -113,9 +129,9 @@
       <button class="border border-slate-200 rounded-md px-3 py-1.5 text-sm bg-white">Property Type ▾</button>
       <button class="border border-slate-200 rounded-md px-3 py-1.5 text-sm bg-white">Close Date: 2026 ▾</button>
       <div class="ml-auto flex items-center gap-2">
-        <div class="border border-slate-200 rounded-md bg-white inline-flex p-0.5 text-sm">
-          <span class="px-3 py-1 bg-slate-100 rounded font-medium">Table</span>
-          <span class="px-3 py-1 flex items-center gap-1">Board <span class="text-[10px] bg-violet-500 text-white px-1.5 rounded">NEW</span></span>
+        <div class="border border-slate-200 rounded-md bg-white inline-flex p-0.5 text-sm" id="view-toggle">
+          <button id="btn-table" onclick="setView('table')" class="px-3 py-1 rounded font-medium bg-slate-100">Table</button>
+          <button id="btn-board" onclick="setView('board')" class="px-3 py-1 flex items-center gap-1">Board <span class="text-[10px] bg-violet-500 text-white px-1.5 rounded">NEW</span></button>
         </div>
         <button class="border border-slate-200 rounded-md px-3 py-1.5 text-sm bg-white flex items-center gap-1.5">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg>New Report
@@ -129,8 +145,8 @@
       </div>
     </div>
 
-    <!-- Table -->
-    <div id="pipeline-table" class="bg-white border border-slate-200 rounded-lg overflow-hidden"></div>
+    <!-- Pipeline body (table or board) -->
+    <div id="pipeline-body"></div>
   </div>
 
   <!-- ── MODAL OVERLAY ──────────────────────────────────── -->
@@ -375,6 +391,7 @@
   </div>
 
 </div><!-- /pipeline wrapper -->
+<div id="modal-root"></div>
 
 <script>
 /* ── Pipeline data ───────────────────────────────────────── */
@@ -389,18 +406,18 @@ const STAGES = [
 const STAGE_DOTS = {pitching:'#5BA6E6',sourcing:'#9182e5',evaluating:'#a87dd1',transacting:'#e3a93e',closed:'#5fc079',dead:'#aaa'};
 
 let DEALS = [
-  { id:114679, ref:'S26-003', title:'123 Main Street',   city:'Chicago, IL',    dealType:'Sale',      propType:'Land',            stage:'pitching',   value:1400000, gross:0,      openTasks:2, nextDate:{m:'MAY',d:1,label:'Listing Executed'}, alert:false, sf:32000 },
-  { id:114680, ref:'L26-002', title:'123 Main ST',       city:'Wilmington, NC', dealType:'Lease',     propType:'Office',          stage:'pitching',   value:100000,  gross:0,      openTasks:8, nextDate:{m:'MAY',d:2,label:'LOI Executed'},      alert:false, sf:14500 },
-  { id:115347, ref:'S26-0',   title:'118 North Peoria',  city:'Peachtree, TX',  dealType:'Sale',      propType:'Special Purpose', stage:'pitching',   value:0,       gross:0,      openTasks:1, nextDate:null, alert:true,  sf:600 },
-  { id:114677, ref:'114677',  title:'3200 Michigan Ave', city:'Chicago, IL',    dealType:'Sale',      propType:'Office',          stage:'pitching',   value:1000000, gross:0,      openTasks:1, nextDate:null, alert:false, sf:48000 },
-  { id:114670, ref:'L26-004', title:'Sunrise Place',     city:'Oak Park, IL',   dealType:'Lease',     propType:'Multifamily',     stage:'evaluating', value:400000,  gross:3000,   openTasks:2, nextDate:null, alert:true,  sf:23000 },
-  { id:114664, ref:'114664',  title:'The Mobi Building', city:'Chicago, IL',    dealType:'Sale',      propType:'Office',          stage:'evaluating', value:100000,  gross:0,      openTasks:5, nextDate:null, alert:false, sf:18000 },
-  { id:114675, ref:'S26-001', title:'730 Larrabee Rd',   city:'Chicago, IL',    dealType:'Sale',      propType:'Office',          stage:'transacting',value:5000000, gross:100000, openTasks:2, nextDate:{m:'MAY',d:1,label:'Contract Executed'}, alert:false, sf:120000 },
-  { id:114672, ref:'114672',  title:'456 Sesame Street', city:'Boston, MA',     dealType:'Sale',      propType:'Office',          stage:'transacting',value:500000,  gross:13500,  openTasks:2, nextDate:null, alert:false, sf:7500 },
-  { id:114663, ref:'114663',  title:'123 Main Street',   city:'Boca Raton, FL', dealType:'Other',     propType:'Office',          stage:'transacting',value:10000,   gross:500,    openTasks:0, nextDate:null, alert:false, sf:1200 },
-  { id:114665, ref:'L26-001', title:'Belton Heights | Suite 101', city:'Chicago, IL', dealType:'Lease', propType:'Office',       stage:'closed',     value:26770,   gross:1606,   openTasks:6, nextDate:{m:'DEC',d:14,label:'Listing Executed'}, alert:true, sf:5800 },
-  { id:114676, ref:'S26-003', title:'1600 Pennsylvania Ave', city:'Washington, DC', dealType:'Sale',  propType:'Office',          stage:'closed',     value:10000000,gross:150000, openTasks:4, nextDate:null, alert:false, sf:55000 },
-  { id:114674, ref:'114674',  title:'Tenant Rep Assignment', city:'Boca Raton, FL', dealType:'Tenant Rep', propType:'Retail',    stage:'closed',     value:100000,  gross:3000,   openTasks:0, nextDate:null, alert:false, sf:3100 },
+  { id:114679, ref:'S26-003', title:'123 Main Street',   city:'Chicago, IL',    dealType:'Sale',      propType:'Land',            stage:'pitching',   value:1400000, gross:0,      openTasks:2, nextDate:{m:'MAY',d:1,label:'Listing Executed'}, alert:false, sf:32000, probability:20 },
+  { id:114680, ref:'L26-002', title:'123 Main ST',       city:'Wilmington, NC', dealType:'Lease',     propType:'Office',          stage:'pitching',   value:100000,  gross:0,      openTasks:8, nextDate:{m:'MAY',d:2,label:'LOI Executed'},      alert:false, sf:14500, probability:35 },
+  { id:115347, ref:'S26-0',   title:'118 North Peoria',  city:'Peachtree, TX',  dealType:'Sale',      propType:'Special Purpose', stage:'pitching',   value:0,       gross:0,      openTasks:1, nextDate:null, alert:true,  sf:600,   probability:10 },
+  { id:114677, ref:'114677',  title:'3200 Michigan Ave', city:'Chicago, IL',    dealType:'Sale',      propType:'Office',          stage:'pitching',   value:1000000, gross:0,      openTasks:1, nextDate:null, alert:false, sf:48000, probability:25 },
+  { id:114670, ref:'L26-004', title:'Sunrise Place',     city:'Oak Park, IL',   dealType:'Lease',     propType:'Multifamily',     stage:'evaluating', value:400000,  gross:3000,   openTasks:2, nextDate:null, alert:true,  sf:23000, probability:50 },
+  { id:114664, ref:'114664',  title:'The Mobi Building', city:'Chicago, IL',    dealType:'Sale',      propType:'Office',          stage:'evaluating', value:100000,  gross:0,      openTasks:5, nextDate:null, alert:false, sf:18000, probability:60 },
+  { id:114675, ref:'S26-001', title:'730 Larrabee Rd',   city:'Chicago, IL',    dealType:'Sale',      propType:'Office',          stage:'transacting',value:5000000, gross:100000, openTasks:2, nextDate:{m:'MAY',d:1,label:'Contract Executed'}, alert:false, sf:120000, probability:75 },
+  { id:114672, ref:'114672',  title:'456 Sesame Street', city:'Boston, MA',     dealType:'Sale',      propType:'Office',          stage:'transacting',value:500000,  gross:13500,  openTasks:2, nextDate:null, alert:false, sf:7500,  probability:80 },
+  { id:114663, ref:'114663',  title:'123 Main Street',   city:'Boca Raton, FL', dealType:'Other',     propType:'Office',          stage:'transacting',value:10000,   gross:500,    openTasks:0, nextDate:null, alert:false, sf:1200,  probability:85 },
+  { id:114665, ref:'L26-001', title:'Belton Heights | Suite 101', city:'Chicago, IL', dealType:'Lease', propType:'Office',       stage:'closed',     value:26770,   gross:1606,   openTasks:6, nextDate:{m:'DEC',d:14,label:'Listing Executed'}, alert:true, sf:5800, probability:100 },
+  { id:114676, ref:'S26-003', title:'1600 Pennsylvania Ave', city:'Washington, DC', dealType:'Sale',  propType:'Office',          stage:'closed',     value:10000000,gross:150000, openTasks:4, nextDate:null, alert:false, sf:55000, probability:100 },
+  { id:114674, ref:'114674',  title:'Tenant Rep Assignment', city:'Boca Raton, FL', dealType:'Tenant Rep', propType:'Retail',    stage:'closed',     value:100000,  gross:3000,   openTasks:0, nextDate:null, alert:false, sf:3100,  probability:100 },
 ];
 
 const fmtUSD = n => n === 0 ? '$0' : '$' + Number(n).toLocaleString();
@@ -429,8 +446,9 @@ function renderPipeline(highlightId) {
     }).join('');
 
   // Table
+  if (pipelineView === 'board') { renderPipelineBoard(highlightId); return; }
   const shown = STAGES.filter(s => dealsBy(s.key).length > 0);
-  document.getElementById('pipeline-table').innerHTML =
+  document.getElementById('pipeline-body').innerHTML =
     `<table class="w-full text-sm">
       <thead class="bg-slate-50 text-slate-500">
         <tr class="text-left">
@@ -824,6 +842,368 @@ function getCSV(){if(!D)return'';const broker=document.getElementById('broker-se
 function copyCSV(){if(!D){setStatus('Extract first.');return;}navigator.clipboard.writeText(getCSV()).then(()=>setStatus('✓ CSV copied')).catch(()=>setStatus('Copy failed'));}
 function downloadCSV(){if(!D){setStatus('Extract first.');return;}const b=new Blob([getCSV()],{type:'text/csv'});const u=URL.createObjectURL(b);const a=document.createElement('a');a.href=u;a.download='lease_export.csv';a.click();URL.revokeObjectURL(u);}
 
+/* ── View toggle ─────────────────────────────────────────── */
+let pipelineView = localStorage.getItem('bp_view') || 'table';
+
+function setView(v) {
+  pipelineView = v;
+  localStorage.setItem('bp_view', v);
+  document.getElementById('btn-table').className = 'px-3 py-1 rounded ' + (v==='table' ? 'font-medium bg-slate-100' : '');
+  document.getElementById('btn-board').className = 'px-3 py-1 flex items-center gap-1 ' + (v==='board' ? 'font-medium bg-slate-100' : '');
+  renderPipeline();
+}
+
+/* ── Board helpers ───────────────────────────────────────── */
+const STAGE_COLORS = {pitching:{color:'pitch',label:'Pitching'},evaluating:{color:'eval',label:'Evaluating'},transacting:{color:'trans',label:'Transacting'},closed:{color:'close',label:'Closed'},dead:{color:'dead',label:'Dead'}};
+function stageDot(k) { return STAGE_DOTS[k] || '#aaa'; }
+function stageColor(k) { return STAGE_COLORS[k] || {color:'dead',label:k}; }
+function labeledInput(label, val, id) {
+  return `<label class="block"><span class="text-xs text-slate-500">${label}</span>
+    <input id="${id}" type="text" value="${esc(String(val??''))}" class="mt-1 border border-slate-200 rounded px-2 py-1.5 w-full text-sm focus:outline-none focus:ring-1 focus:ring-violet-400"></label>`;
+}
+function labeledSelect(label, opts, id) {
+  return `<label class="block"><span class="text-xs text-slate-500">${label}</span>
+    <select id="${id}" class="mt-1 border border-slate-200 rounded px-2 py-1.5 w-full text-sm focus:outline-none focus:ring-1 focus:ring-violet-400">
+    ${opts.map(o=>`<option>${o}</option>`).join('')}</select></label>`;
+}
+
+const STAGE_CRITICAL_DATES = {
+  pitching:    [['Listing Executed',''],['Listing Expires','']],
+  evaluating:  [['LOI Executed',''],['Offer Sent',''],['Renewal Option Notice','']],
+  transacting: [['Contract Executed',''],['Earnest Money Deadline',''],['Close Date','']],
+  closed:      [['Closing Date',''],['Voucher Approved','']],
+  dead:        [['Dead Reason Recorded','']]
+};
+
+/* ── Board render ────────────────────────────────────────── */
+function renderPipelineBoard(highlightId) {
+  const stagesShown = STAGES.filter(s => s.key !== 'dead');
+  document.getElementById('pipeline-body').innerHTML = `
+    <div class="rounded-lg border border-dashed border-violet-300 bg-violet-50/50 p-3 mb-3 text-sm flex items-start gap-3" id="board-banner">
+      <div class="ai-grad w-7 h-7 rounded-md flex items-center justify-center text-white shrink-0">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l1.8 5.4L19 9l-5.2 1.6L12 16l-1.8-5.4L5 9l5.2-1.6z"/></svg>
+      </div>
+      <div class="flex-1"><div class="font-medium text-slate-800">Board view <span class="text-[10px] bg-violet-500 text-white px-1.5 rounded ml-1">NEW</span></div>
+        <div class="text-slate-600 text-xs mt-0.5">Drag deals between stages to update them.</div></div>
+      <button class="text-violet-600 text-sm" onclick="document.getElementById('board-banner').remove()">Dismiss</button>
+    </div>
+    <div class="flex gap-3 overflow-x-auto pb-4 items-stretch" id="board-cols">
+      ${stagesShown.map(s => boardColumn(s, highlightId)).join('')}
+    </div>
+    <div id="dead-drop-zone" class="dead-zone">
+      <div class="dead-target rounded-lg py-3 px-5 flex items-center gap-3">
+        <div class="w-8 h-8 rounded-md bg-rose-100 flex items-center justify-center">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>
+        </div>
+        <div><div class="font-medium">Drop here to mark as Dead</div>
+          <div class="text-xs opacity-80">A confirmation will open so you can record the reason.</div></div>
+      </div>
+    </div>`;
+  wireBoardDnD();
+}
+
+function boardColumn(s, highlightId) {
+  const ds = dealsBy(s.key);
+  return `
+    <div class="kanban-col flex-1 min-w-[220px] max-w-[280px] bg-slate-100/70 rounded-lg border border-slate-200 flex flex-col" data-stage="${s.key}">
+      <div class="px-3 py-2.5 flex items-center gap-2 border-b border-slate-200 rounded-t-lg stage-bar-${s.color}">
+        <span class="w-2 h-2 rounded-full shrink-0" style="background:${stageDot(s.key)}"></span>
+        <span class="font-semibold text-slate-700 text-sm">${s.label}</span>
+        <span class="text-xs bg-white/70 px-1.5 rounded text-slate-600">${ds.length}</span>
+        <span class="ml-auto text-xs text-slate-600 font-medium">${fmtUSD(sumVal(ds))}</span>
+      </div>
+      <div class="p-2 space-y-2 flex-1 min-h-[100px]" data-dropzone>
+        ${ds.map(d => boardCard(d, d.id===highlightId)).join('') || '<div class="text-xs text-slate-400 text-center py-6">Drop deals here</div>'}
+      </div>
+    </div>`;
+}
+
+function boardCard(d, highlight) {
+  const prob = d.probability ?? 50;
+  return `
+    <div class="kanban-card bg-white border border-slate-200 rounded-md p-3 cursor-grab hover:shadow-sm${highlight?' new-deal-flash':''}" draggable="true" data-id="${d.id}">
+      <div class="flex items-start gap-1.5">
+        ${d.alert ? '<span class="mt-0.5 inline-flex w-4 h-4 rounded-full bg-rose-50 text-rose-600 items-center justify-center text-[10px] shrink-0">!</span>' : ''}
+        <span class="text-slate-800 font-medium text-sm leading-tight flex-1">${esc(d.title)}</span>
+        <span class="text-[10px] text-slate-400 shrink-0">${esc(d.ref)}</span>
+        <button class="card-kebab text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded px-1 leading-none text-base shrink-0" draggable="false" data-id="${d.id}">⋯</button>
+      </div>
+      <div class="mt-1 text-xs text-slate-500">${esc(d.city)} · ${esc(d.dealType)} · ${esc(d.propType)}</div>
+      <div class="mt-2 flex items-center justify-between text-xs">
+        <span class="font-semibold text-slate-700">${fmtUSD(d.value)}</span>
+        <span class="text-slate-400">GCI ${fmtUSD(d.gross)}</span>
+      </div>
+      <div class="mt-2">
+        <div class="flex items-center justify-between text-[10px] text-slate-500 mb-1">
+          <span>Close Probability</span><span>${prob}%</span>
+        </div>
+        <div class="health-bar"><div style="width:${prob}%;background:var(--bp-button-primary-bg)"></div></div>
+      </div>
+      <div class="mt-2 flex items-center gap-2 text-xs text-slate-500">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
+        <span>${d.openTasks} task${d.openTasks!==1?'s':''}</span>
+        ${d.nextDate ? `<div class="flex items-center gap-1 ml-auto">
+          <div class="w-5 h-6 rounded bg-violet-50 border border-violet-200 flex flex-col items-center justify-center leading-none">
+            <span class="text-[7px] text-violet-700 font-bold">${d.nextDate.m}</span>
+            <span class="text-[9px] text-violet-700 font-bold">${d.nextDate.d}</span>
+          </div>
+          <span class="truncate max-w-[90px]">${esc(d.nextDate.label)}</span>
+        </div>` : ''}
+      </div>
+    </div>`;
+}
+
+/* ── Drag & Drop ─────────────────────────────────────────── */
+function wireBoardDnD() {
+  let dragId = null;
+  const deadZone = document.getElementById('dead-drop-zone');
+
+  document.querySelectorAll('.kanban-card').forEach(card => {
+    card.addEventListener('dragstart', e => {
+      if (e.target.closest('.card-kebab')) { e.preventDefault(); return; }
+      dragId = card.dataset.id;
+      card.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+      try { e.dataTransfer.setData('text/plain', dragId); } catch(_) {}
+      if (deadZone) deadZone.classList.add('visible');
+    });
+    card.addEventListener('dragend', () => {
+      card.classList.remove('dragging');
+      document.querySelectorAll('.kanban-col').forEach(c => c.classList.remove('dropping'));
+      if (deadZone) deadZone.classList.remove('visible','dropping');
+    });
+  });
+
+  document.querySelectorAll('.card-kebab').forEach(btn => {
+    btn.addEventListener('mousedown', e => e.stopPropagation());
+    btn.addEventListener('click', e => {
+      e.preventDefault(); e.stopPropagation();
+      const deal = DEALS.find(d => d.id == btn.dataset.id);
+      if (deal) openCardMenu(deal, btn);
+    });
+  });
+
+  document.querySelectorAll('.kanban-col').forEach(col => {
+    col.addEventListener('dragover', e => { e.preventDefault(); col.classList.add('dropping'); });
+    col.addEventListener('dragleave', () => col.classList.remove('dropping'));
+    col.addEventListener('drop', e => {
+      e.preventDefault(); col.classList.remove('dropping');
+      const dest = col.dataset.stage;
+      const deal = DEALS.find(d => d.id == dragId);
+      if (!deal || deal.stage === dest) return;
+      openStageChangeModal(deal, dest);
+    });
+  });
+
+  if (deadZone) {
+    deadZone.addEventListener('dragover', e => { e.preventDefault(); deadZone.classList.add('dropping'); });
+    deadZone.addEventListener('dragleave', e => { if (!deadZone.contains(e.relatedTarget)) deadZone.classList.remove('dropping'); });
+    deadZone.addEventListener('drop', e => {
+      e.preventDefault(); deadZone.classList.remove('dropping','visible');
+      const deal = DEALS.find(d => d.id == dragId);
+      if (!deal || deal.stage === 'dead') return;
+      openStageChangeModal(deal, 'dead');
+    });
+  }
+}
+
+/* ── Card kebab menu ─────────────────────────────────────── */
+function closeCardMenu() { const m = document.getElementById('card-menu'); if (m) m.remove(); }
+document.addEventListener('click', e => { if (!e.target.closest('#card-menu') && !e.target.closest('.card-kebab')) closeCardMenu(); });
+
+function positionMenu(menu, anchor, w=200) {
+  const r = anchor.getBoundingClientRect();
+  menu.style.top = Math.min(r.bottom+4, window.innerHeight-menu.offsetHeight-8)+'px';
+  menu.style.left = Math.min(Math.max(8, r.right-w), window.innerWidth-w-8)+'px';
+}
+
+function openCardMenu(deal, anchor) {
+  closeCardMenu();
+  const menu = document.createElement('div');
+  menu.id = 'card-menu';
+  menu.className = 'fixed bg-white shadow-lg border border-slate-200 rounded-md py-1 text-sm z-50 min-w-[200px] anim-fadein';
+  menu.innerHTML = `
+    <button class="w-full text-left px-3 py-1.5 hover:bg-slate-50 flex items-center justify-between" data-act="stage"><span>Update Stage</span><span class="text-slate-400">›</span></button>
+    <button class="w-full text-left px-3 py-1.5 hover:bg-slate-50 flex items-center justify-between" data-act="type"><span>Update Deal Type</span><span class="text-slate-400">›</span></button>
+    <div class="border-t border-slate-100 my-1"></div>
+    <button class="w-full text-left px-3 py-1.5 hover:bg-slate-50 flex items-center gap-2" data-act="copy">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 012-2h10"/></svg>Copy Deal
+    </button>
+    <button class="w-full text-left px-3 py-1.5 hover:bg-rose-50 text-rose-600 flex items-center gap-2" data-act="delete">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg>Delete Deal
+    </button>`;
+  document.body.appendChild(menu);
+  positionMenu(menu, anchor, 200);
+  menu.addEventListener('click', e => {
+    const btn = e.target.closest('[data-act]'); if (!btn) return; e.stopPropagation();
+    const act = btn.dataset.act;
+    if (act === 'stage') { openStageSubmenu(deal, anchor); return; }
+    if (act === 'type')  { openDealTypeSubmenu(deal, anchor); return; }
+    closeCardMenu();
+    if (act === 'copy') {
+      const newId = Math.max(...DEALS.map(x=>x.id))+1;
+      DEALS.push({...deal, id:newId, ref:'COPY-'+newId, title:deal.title+' (copy)'});
+      renderPipelineBoard(); flashToast('Deal copied');
+    }
+    if (act === 'delete') openDeleteConfirm(deal);
+  });
+}
+
+function openStageSubmenu(deal, anchor) {
+  closeCardMenu();
+  const menu = document.createElement('div');
+  menu.id = 'card-menu';
+  menu.className = 'fixed bg-white shadow-lg border border-slate-200 rounded-md py-1 text-sm z-50 min-w-[200px] anim-fadein';
+  menu.innerHTML = `<div class="px-3 py-1.5 text-[11px] uppercase tracking-wide text-slate-400 border-b border-slate-100">Update Stage</div>`
+    + STAGES.filter(s=>s.key!==deal.stage).map(s=>`<button class="w-full text-left px-3 py-1.5 hover:bg-slate-50 flex items-center gap-2" data-stage="${s.key}">
+        <span class="w-1.5 h-1.5 rounded-full" style="background:${stageDot(s.key)}"></span>${s.label}</button>`).join('');
+  document.body.appendChild(menu);
+  positionMenu(menu, anchor, 200);
+  menu.addEventListener('click', e => {
+    const btn = e.target.closest('[data-stage]'); if (!btn) return;
+    closeCardMenu(); openStageChangeModal(deal, btn.dataset.stage);
+  });
+}
+
+function openDealTypeSubmenu(deal, anchor) {
+  closeCardMenu();
+  const types = ['Sale','Lease','Tenant Rep','Other'].filter(t=>t!==deal.dealType);
+  const menu = document.createElement('div');
+  menu.id = 'card-menu';
+  menu.className = 'fixed bg-white shadow-lg border border-slate-200 rounded-md py-1 text-sm z-50 min-w-[180px] anim-fadein';
+  menu.innerHTML = `<div class="px-3 py-1.5 text-[11px] uppercase tracking-wide text-slate-400 border-b border-slate-100">Update Deal Type</div>`
+    + types.map(t=>`<button class="w-full text-left px-3 py-1.5 hover:bg-slate-50" data-type="${t}">${t}</button>`).join('');
+  document.body.appendChild(menu);
+  positionMenu(menu, anchor, 180);
+  menu.addEventListener('click', e => {
+    const btn = e.target.closest('[data-type]'); if (!btn) return;
+    closeCardMenu(); deal.dealType = btn.dataset.type; renderPipelineBoard(); flashToast(`Deal type → ${deal.dealType}`);
+  });
+}
+
+/* ── Stage change modal ──────────────────────────────────── */
+function stageBadge(k) {
+  const s = stageColor(k);
+  return `<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium stage-bar-${s.color} text-slate-700">
+    <span class="w-1.5 h-1.5 rounded-full" style="background:${stageDot(k)}"></span>${s.label}</span>`;
+}
+
+function openStageChangeModal(deal, dest) {
+  const isLease = deal.dealType === 'Lease' || deal.dealType === 'Tenant Rep';
+  const dates = STAGE_CRITICAL_DATES[dest] || [];
+  document.getElementById('modal-root').innerHTML = `
+    <div class="fixed inset-0 bg-slate-900/50 z-50 flex items-center justify-center p-4 anim-fadein" onclick="if(event.target===this)cancelStageChange()">
+      <div class="bg-white rounded-lg w-full max-w-[760px] max-h-[90vh] shadow-xl flex flex-col">
+        <div class="px-5 py-4 border-b border-slate-200 flex items-center gap-3 shrink-0">
+          <div class="flex items-center gap-2 flex-1 min-w-0 flex-wrap">
+            <span class="font-semibold truncate">${esc(deal.title)}</span>
+            <span class="text-slate-400">·</span>
+            ${stageBadge(deal.stage)}
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-slate-400 shrink-0"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
+            ${stageBadge(dest)}
+          </div>
+          <button class="text-slate-400 hover:text-slate-600 ml-2 shrink-0" onclick="cancelStageChange()">✕</button>
+        </div>
+        <div class="overflow-y-auto px-5 py-4 space-y-5 flex-1">
+
+          <section>
+            <h3 class="text-sm font-semibold text-slate-700 mb-3">Deal</h3>
+            <div class="grid grid-cols-3 gap-3">
+              ${labeledInput('Close Probability', (deal.probability??50)+'%', 'sc-prob')}
+            </div>
+          </section>
+
+          <section>
+            <h3 class="text-sm font-semibold text-slate-700 mb-3">Property &amp; Space</h3>
+            <div class="grid grid-cols-3 gap-3">
+              ${labeledInput('Address 2', deal.address2||'', 'sc-addr2')}
+              ${labeledInput('Space Size (SF)', deal.sf||'', 'sc-sf')}
+            </div>
+          </section>
+
+          <section>
+            <h3 class="text-sm font-semibold text-slate-700 mb-3">Transaction</h3>
+            ${isLease ? `
+              <div class="grid grid-cols-3 gap-3">
+                ${labeledInput('Average Lease Rate', '', 'sc-rate')}
+                ${labeledSelect('Rent Unit', ['Monthly Rent','Annual Rent','$/SF/Year','$/SF/Month'], 'sc-rateunit')}
+                ${labeledInput('Lease Term', '', 'sc-term')}
+                ${labeledSelect('Term Unit', ['Months','Years'], 'sc-termunit')}
+                ${labeledInput('Total Rent', fmtUSD(deal.value), 'sc-totalrent')}
+                ${labeledSelect('Commission Units', ['% of Rent','$/SF (Flat Fee)','$/SF/Month','$/SF/Year','Flat Rate'], 'sc-communits')}
+                ${labeledInput('Gross Commission %', '0.75', 'sc-commpct')}
+                ${labeledInput('Gross Commission $', fmtUSD(deal.gross||0), 'sc-commdol')}
+              </div>` : `
+              <div class="grid grid-cols-3 gap-3">
+                ${labeledInput('Sale Price', fmtUSD(deal.value), 'sc-saleprice')}
+                ${labeledInput('Cap Rate %', '', 'sc-cap')}
+                ${labeledSelect('Commission Units', ['% of Sale','Flat Rate'], 'sc-communits')}
+                ${labeledInput('Gross Commission %', '2', 'sc-commpct')}
+                ${labeledInput('Gross Commission $', fmtUSD(deal.gross||0), 'sc-commdol')}
+              </div>`}
+          </section>
+
+          ${dates.length ? `
+          <section>
+            <h3 class="text-sm font-semibold text-slate-700 mb-3">Critical Dates
+              <span class="text-xs font-normal text-slate-400 ml-1">required for ${stageColor(dest).label}</span>
+            </h3>
+            <div class="grid grid-cols-2 gap-3">
+              ${dates.map(([lbl,ph],i)=>`
+                <label class="block">
+                  <span class="text-xs text-slate-500">${lbl}${i===0?' <span class="text-rose-500">*</span>':''}</span>
+                  <input type="text" class="mt-1 border border-slate-200 rounded px-2 py-1.5 w-full text-sm focus:outline-none focus:ring-1 focus:ring-violet-400" placeholder="${ph||'mm/dd/yyyy'}">
+                </label>`).join('')}
+            </div>
+          </section>` : ''}
+
+        </div>
+        <div class="px-5 py-3 border-t border-slate-200 flex items-center justify-end gap-2 shrink-0">
+          <button class="text-slate-600 text-sm px-4 py-1.5 hover:bg-slate-50 rounded" onclick="cancelStageChange()">Cancel</button>
+          <button class="bg-violet-500 hover:bg-violet-600 text-white text-sm px-4 py-1.5 rounded font-medium" onclick="confirmStageChange('${deal.id}','${dest}')">Save &amp; Move</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+function cancelStageChange() { document.getElementById('modal-root').innerHTML = ''; }
+
+function confirmStageChange(dealId, dest) {
+  const deal = DEALS.find(d => d.id == dealId);
+  if (!deal) return;
+  const prob = document.getElementById('sc-prob')?.value;
+  if (prob) deal.probability = parseInt(prob) || deal.probability;
+  deal.stage = dest;
+  cancelStageChange();
+  renderPipelineBoard();
+  flashToast(`${deal.title} moved to ${stageColor(dest).label}`);
+}
+
+function openDeleteConfirm(deal) {
+  document.getElementById('modal-root').innerHTML = `
+    <div class="fixed inset-0 bg-slate-900/50 z-50 flex items-center justify-center p-6 anim-fadein">
+      <div class="bg-white rounded-lg w-[420px] shadow-xl">
+        <div class="px-5 py-4 border-b border-slate-200 flex items-center gap-2">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#dc2626" stroke-width="2"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg>
+          <div class="font-semibold">Delete deal?</div>
+        </div>
+        <div class="px-5 py-4 text-sm text-slate-600">
+          This will permanently delete <strong>${esc(deal.title)}</strong> (${esc(deal.ref)}). This action can't be undone.
+        </div>
+        <div class="px-5 py-3 border-t border-slate-200 flex items-center justify-end gap-2">
+          <button class="text-slate-600 text-sm px-3 py-1.5 hover:bg-slate-50 rounded" onclick="document.getElementById('modal-root').innerHTML=''">Cancel</button>
+          <button class="bg-rose-600 hover:bg-rose-700 text-white text-sm px-3 py-1.5 rounded" id="del-confirm">Delete deal</button>
+        </div>
+      </div>
+    </div>`;
+  document.getElementById('del-confirm').onclick = () => {
+    const i = DEALS.findIndex(x => x.id === deal.id);
+    if (i >= 0) DEALS.splice(i, 1);
+    document.getElementById('modal-root').innerHTML = '';
+    renderPipelineBoard(); flashToast('Deal deleted');
+  };
+}
+
 /* ── API key management ──────────────────────────────────── */
 function getApiKey() { return localStorage.getItem('bp_anthropic_key') || ''; }
 
@@ -1026,7 +1406,7 @@ document.getElementById('pdf-input').addEventListener('change', function() {
   this.value = '';
 });
 
-renderPipeline();
+setView(pipelineView);
 initApiKey();
 </script>
 </body>
