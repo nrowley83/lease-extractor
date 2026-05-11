@@ -66,11 +66,12 @@
   .dead-zone.visible { max-height:120px; opacity:1; margin-top:10px; }
   .dead-zone .dead-target { border:2px dashed #f4a8b1; background:#fff5f6; color:#b91c47; transition:background .15s,border-color .15s; }
   .dead-zone.dropping .dead-target { background:#ffe4e8; border-color:#e11d48; }
-  .stage-bar-pitch { background:#DCEDFF; }
-  .stage-bar-eval  { background:#ECE0F5; }
-  .stage-bar-trans { background:#FFEFD0; }
-  .stage-bar-close { background:#D8F1DD; }
-  .stage-bar-dead  { background:#EEEEF1; }
+  .stage-bar-pitch  { background:#DCEDFF; }
+  .stage-bar-source { background:#E2DEFB; }
+  .stage-bar-eval   { background:#ECE0F5; }
+  .stage-bar-trans  { background:#FFEFD0; }
+  .stage-bar-close  { background:#D8F1DD; }
+  .stage-bar-dead   { background:#EEEEF1; }
 
   /* Toast */
   #toast { transition: opacity .3s, transform .3s; }
@@ -397,11 +398,12 @@
 /* ── Pipeline data ───────────────────────────────────────── */
 const MONTHS = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
 const STAGES = [
-  { key:'pitching',   label:'Pitching',   color:'pitch' },
-  { key:'evaluating', label:'Evaluating', color:'eval'  },
-  { key:'transacting',label:'Transacting',color:'trans' },
-  { key:'closed',     label:'Closed',     color:'close' },
-  { key:'dead',       label:'Dead',       color:'dead'  },
+  { key:'pitching',   label:'Pitching',   color:'pitch'  },
+  { key:'sourcing',   label:'Sourcing',   color:'source' },
+  { key:'evaluating', label:'Evaluating', color:'eval'   },
+  { key:'transacting',label:'Transacting',color:'trans'  },
+  { key:'closed',     label:'Closed',     color:'close'  },
+  { key:'dead',       label:'Dead',       color:'dead'   },
 ];
 const STAGE_DOTS = {pitching:'#5BA6E6',sourcing:'#9182e5',evaluating:'#a87dd1',transacting:'#e3a93e',closed:'#5fc079',dead:'#aaa'};
 
@@ -854,7 +856,7 @@ function setView(v) {
 }
 
 /* ── Board helpers ───────────────────────────────────────── */
-const STAGE_COLORS = {pitching:{color:'pitch',label:'Pitching'},evaluating:{color:'eval',label:'Evaluating'},transacting:{color:'trans',label:'Transacting'},closed:{color:'close',label:'Closed'},dead:{color:'dead',label:'Dead'}};
+const STAGE_COLORS = {pitching:{color:'pitch',label:'Pitching'},sourcing:{color:'source',label:'Sourcing'},evaluating:{color:'eval',label:'Evaluating'},transacting:{color:'trans',label:'Transacting'},closed:{color:'close',label:'Closed'},dead:{color:'dead',label:'Dead'}};
 function stageDot(k) { return STAGE_DOTS[k] || '#aaa'; }
 function stageColor(k) { return STAGE_COLORS[k] || {color:'dead',label:k}; }
 function labeledInput(label, val, id) {
@@ -869,6 +871,7 @@ function labeledSelect(label, opts, id) {
 
 const STAGE_CRITICAL_DATES = {
   pitching:    [['Listing Executed',''],['Listing Expires','']],
+  sourcing:    [['Prospect Identified',''],['Initial Outreach','']],
   evaluating:  [['LOI Executed',''],['Offer Sent',''],['Renewal Option Notice','']],
   transacting: [['Contract Executed',''],['Earnest Money Deadline',''],['Close Date','']],
   closed:      [['Closing Date',''],['Voucher Approved','']],
