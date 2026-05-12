@@ -77,10 +77,9 @@
   #toast { transition: opacity .3s, transform .3s; }
   #toast.hide { opacity:0; transform:translateY(12px); pointer-events:none; }
 
-  /* Deal drawer */
-  .deal-drawer-panel { width:min(700px,100vw); background:white; overflow-y:auto; box-shadow:-4px 0 32px rgba(0,0,0,.18); display:flex; flex-direction:column; }
-  @keyframes drawerIn { from{transform:translateX(100%);} to{transform:translateX(0);} }
-  .deal-drawer-enter { animation:drawerIn .22s cubic-bezier(.2,.8,.4,1) forwards; }
+  /* Deal page fade-in */
+  @keyframes pageIn { from{opacity:0;transform:translateY(6px);} to{opacity:1;transform:none;} }
+  .page-enter { animation:pageIn .18s ease-out forwards; }
 </style>
 </head>
 <body class="text-slate-800">
@@ -120,7 +119,7 @@
 <div class="flex-1 relative overflow-hidden">
 
   <!-- Pipeline content (blurred while modal open) -->
-  <div id="pipeline-page" class="absolute inset-0 overflow-y-auto px-6 pt-5 pb-10 transition-all duration-300" style="filter:blur(2px);pointer-events:none;user-select:none;">
+  <div id="pipeline-page" class="absolute inset-0 overflow-y-auto px-6 pt-5 pb-10 transition-all duration-300">
 
     <!-- Stage strip -->
     <div id="stage-strip" class="flex items-stretch bg-white rounded-lg border border-slate-200 overflow-hidden mb-3 text-xs"></div>
@@ -154,6 +153,103 @@
     <!-- Pipeline body (table or board) -->
     <div id="pipeline-body"></div>
   </div>
+
+  <!-- ── DEAL PAGE ─────────────────────────────────────────── -->
+  <div id="deal-page" style="display:none" class="absolute inset-0 overflow-y-auto bg-[var(--bp-body-bg)]">
+
+    <!-- Sub-nav breadcrumb -->
+    <div class="bg-white border-b border-slate-200 px-6 py-2.5 flex items-center gap-2 text-sm sticky top-0 z-10">
+      <button onclick="closeDealPage()" class="text-violet-600 hover:underline flex items-center gap-1.5">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>Deals Pipeline
+      </button>
+      <span class="text-slate-300">/</span>
+      <span id="dp-breadcrumb" class="text-slate-600 truncate"></span>
+    </div>
+
+    <!-- Deal header -->
+    <div class="bg-white border-b border-slate-200 px-6 pt-5 pb-4">
+      <div class="flex items-start gap-4 max-w-6xl mx-auto">
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center gap-2.5 flex-wrap mb-1">
+            <h1 id="dp-title" class="text-xl font-semibold text-slate-900 leading-tight"></h1>
+            <span id="dp-stage-badge"></span>
+          </div>
+          <div id="dp-meta" class="text-sm text-slate-500 mt-0.5"></div>
+        </div>
+        <div class="flex items-center gap-2 shrink-0">
+          <button onclick="closeDealPage()" class="border border-slate-200 rounded-md px-3 py-1.5 text-sm bg-white hover:bg-slate-50">Close</button>
+        </div>
+      </div>
+      <!-- Metric pills -->
+      <div id="dp-metrics" class="mt-4 flex items-stretch gap-3 max-w-6xl mx-auto"></div>
+    </div>
+
+    <!-- Content -->
+    <div class="px-6 py-5 max-w-6xl mx-auto">
+      <div class="flex gap-5 items-start">
+
+        <!-- Left sidebar -->
+        <div class="w-72 shrink-0 space-y-4">
+          <div class="bg-white border border-slate-200 rounded-lg overflow-hidden">
+            <div class="px-4 py-2.5 border-b border-slate-100 bg-slate-50">
+              <span class="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Property &amp; Space</span>
+            </div>
+            <div class="p-4"><dl id="dp-prop" class="text-sm grid grid-cols-1 gap-y-3"></dl></div>
+          </div>
+          <div class="bg-white border border-slate-200 rounded-lg overflow-hidden">
+            <div class="px-4 py-2.5 border-b border-slate-100 bg-slate-50">
+              <span class="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Transaction</span>
+            </div>
+            <div class="p-4"><dl id="dp-trans" class="text-sm grid grid-cols-1 gap-y-3"></dl></div>
+          </div>
+        </div>
+
+        <!-- Right main panel -->
+        <div class="flex-1 min-w-0">
+          <div class="bg-white border border-slate-200 rounded-lg overflow-hidden">
+            <div class="px-4 py-2.5 border-b border-slate-100 bg-slate-50 flex items-center gap-2">
+              <span class="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Rent Schedule</span>
+              <span id="dp-rs-badge" class="hidden text-[10px] bg-emerald-50 text-emerald-700 px-1.5 py-0.5 rounded font-medium"></span>
+              <div class="ml-auto flex items-center gap-1.5">
+                <button id="dp-save-btn" onclick="saveDealPage()" style="display:none" class="text-[11px] bg-violet-500 hover:bg-violet-600 text-white rounded px-2.5 py-1 font-medium flex items-center gap-1">
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17 21 17 13 7 13"/><polyline points="7 3 7 8 15 8"/></svg>Save
+                </button>
+                <button onclick="document.getElementById('dp-pdf-input').click()" class="text-[11px] border border-violet-300 text-violet-600 hover:bg-violet-50 rounded px-2 py-1 flex items-center gap-1">
+                  <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>Import PDF
+                </button>
+              </div>
+              <input type="file" id="dp-pdf-input" accept=".pdf" class="hidden" onchange="handleDealPagePDF(this)">
+            </div>
+            <div class="overflow-x-auto">
+              <table class="w-full text-sm">
+                <thead class="bg-slate-50 text-slate-500 text-xs uppercase tracking-wider">
+                  <tr>
+                    <th class="text-left font-medium px-4 py-2">Start date</th>
+                    <th class="text-left font-medium px-4 py-2">End date</th>
+                    <th class="text-center font-medium px-3 py-2">Mo.</th>
+                    <th class="text-right font-medium px-4 py-2">Lease rate</th>
+                    <th class="text-right font-medium px-4 py-2">Total rent</th>
+                    <th class="text-center font-medium px-3 py-2">Comm %</th>
+                    <th class="text-right font-medium px-4 py-2">Comm $</th>
+                  </tr>
+                </thead>
+                <tbody id="dp-rb"></tbody>
+                <tfoot id="dp-rs-foot" style="display:none">
+                  <tr class="border-t border-violet-100" style="background:#f5f3ff">
+                    <td colspan="4" class="px-4 py-2 text-right text-[10px] uppercase tracking-wider text-violet-700 font-semibold">Total Rent</td>
+                    <td id="dp-rs-total" class="px-4 py-2 text-right tabular-nums font-semibold text-violet-700">—</td>
+                    <td colspan="2"></td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+  </div><!-- /deal-page -->
 
   <!-- ── MODAL OVERLAY ──────────────────────────────────── -->
   <div id="modal-overlay" class="absolute inset-0 bg-slate-900/50 flex items-start justify-center pt-8 px-6 pb-6 overflow-y-auto z-20">
@@ -1229,115 +1325,84 @@ function openDeleteConfirm(deal) {
   };
 }
 
-/* ── Deal page (drawer) ──────────────────────────────────── */
+/* ── Deal page (full-page nav) ───────────────────────────── */
 let dealPageId = null;
+
+function frSingle(l, v) {
+  return `<div><dt class="text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-0.5">${l}</dt><dd class="${v ? 'text-slate-800' : 'text-slate-300'} text-sm">${v ? esc(String(v)) : '—'}</dd></div>`;
+}
 
 function openDealPage(id) {
   dealPageId = id;
   const deal = DEALS.find(d => d.id === id);
   if (!deal) return;
-  const ld = deal.leaseData || {};
-  const sch = ld.rent_schedule || [];
-  const total = sch.reduce((s,r)=>s+(r.total||0),0);
 
-  document.getElementById('modal-root').innerHTML = `
-    <div class="fixed inset-0 z-50 flex" onclick="if(event.target===this||event.target.classList.contains('dp-backdrop'))closeDealPage()">
-      <div class="dp-backdrop flex-1 bg-slate-900/40"></div>
-      <div class="deal-drawer-panel deal-drawer-enter">
+  // Load persisted leaseData if not already in memory
+  if (!deal.leaseData) {
+    try { deal.leaseData = JSON.parse(localStorage.getItem('bp_ld_' + id) || 'null') || {}; } catch(_) { deal.leaseData = {}; }
+  }
+  const ld = deal.leaseData;
 
-        <div class="px-6 py-4 border-b border-slate-200 flex items-start gap-3 shrink-0 bg-white sticky top-0 z-10">
-          <div class="flex-1 min-w-0">
-            <div class="flex items-center gap-2 flex-wrap">
-              <h2 class="font-semibold text-slate-900 text-lg leading-tight">${esc(deal.title)}</h2>
-              ${stageBadge(deal.stage)}
-            </div>
-            <div class="text-sm text-slate-500 mt-0.5">${esc(deal.ref)} · ${esc(deal.city)} · ${esc(deal.dealType)}</div>
-          </div>
-          <button onclick="closeDealPage()" class="text-slate-400 hover:text-slate-600 text-xl leading-none mt-0.5 shrink-0">✕</button>
-        </div>
+  // Show deal page, hide pipeline
+  document.getElementById('pipeline-page').style.display = 'none';
+  const dp = document.getElementById('deal-page');
+  dp.style.display = '';
+  dp.scrollTop = 0;
+  dp.querySelector('.px-6.py-5').classList.add('page-enter');
 
-        <div class="flex-1 p-6 space-y-4">
+  // Breadcrumb + header
+  document.getElementById('dp-breadcrumb').textContent = deal.title;
+  document.getElementById('dp-title').textContent = deal.title;
+  document.getElementById('dp-stage-badge').innerHTML = stageBadge(deal.stage);
+  document.getElementById('dp-meta').textContent = [deal.ref, deal.city, deal.dealType, deal.propType].filter(Boolean).join(' · ');
 
-          <div class="bg-white border border-slate-200 rounded-lg overflow-hidden">
-            <div class="px-4 py-2.5 border-b border-slate-100 bg-slate-50">
-              <span class="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Property &amp; Space</span>
-            </div>
-            <div class="p-4"><dl class="text-sm grid grid-cols-2 gap-y-2.5">
-              ${fr('Deal Type', deal.dealType)}
-              ${fr('Property Type', deal.propType)}
-              ${fr('Location', deal.city)}
-              ${deal.sf ? fr('Square Feet', Number(deal.sf).toLocaleString()+' SF') : ''}
-              ${ld.landlord_name ? fr('Landlord', ld.landlord_name) : ''}
-              ${ld.tenant_name   ? fr('Tenant', ld.tenant_name) : ''}
-              ${ld.address       ? fr('Address', ld.address) : ''}
-              ${ld.lease_type    ? fr('Lease Type', ld.lease_type) : ''}
-            </dl></div>
-          </div>
+  // Metric pills
+  document.getElementById('dp-metrics').innerHTML = [
+    ['Transaction Value', fmtUSD(deal.value)],
+    ['Broker Gross', fmtUSD(deal.gross)],
+    ['Close Probability', (deal.probability ?? 50) + '%'],
+    deal.sf ? ['Square Feet', Number(deal.sf).toLocaleString() + ' SF'] : null,
+  ].filter(Boolean).map(([l, v]) => `
+    <div class="bg-slate-50 border border-slate-200 rounded-lg px-4 py-2.5">
+      <div class="text-[11px] text-slate-500 uppercase tracking-wider">${l}</div>
+      <div class="text-base font-semibold text-slate-800 mt-0.5">${v}</div>
+    </div>`).join('');
 
-          <div class="bg-white border border-slate-200 rounded-lg overflow-hidden">
-            <div class="px-4 py-2.5 border-b border-slate-100 bg-slate-50">
-              <span class="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Transaction</span>
-            </div>
-            <div class="p-4"><dl class="text-sm grid grid-cols-2 gap-y-2.5">
-              ${fr('Transaction Value', fmtUSD(deal.value))}
-              ${fr('Broker Gross', fmtUSD(deal.gross))}
-              ${fr('Close Probability', (deal.probability??50)+'%')}
-              ${ld.commencement_date ? fr('Commencement Date', ld.commencement_date) : ''}
-              ${ld.expiration_date   ? fr('Expiration Date',   ld.expiration_date)   : ''}
-              ${ld.term_months       ? fr('Lease Term',        ld.term_months+' Months') : ''}
-              ${ld.security_deposit  ? fr('Security Deposit',  ld.security_deposit)  : ''}
-            </dl></div>
-          </div>
+  // Property & Space
+  document.getElementById('dp-prop').innerHTML = [
+    frSingle('Deal Type', deal.dealType),
+    frSingle('Property Type', deal.propType),
+    frSingle('Location', deal.city),
+    ld.landlord_name ? frSingle('Landlord', ld.landlord_name) : '',
+    ld.tenant_name   ? frSingle('Tenant', ld.tenant_name)     : '',
+    ld.address       ? frSingle('Address', ld.address)         : '',
+    ld.lease_type    ? frSingle('Lease Type', ld.lease_type)   : '',
+  ].join('');
 
-          <div class="bg-white border border-slate-200 rounded-lg overflow-hidden">
-            <div class="px-4 py-2.5 border-b border-slate-100 bg-slate-50 flex items-center gap-2">
-              <span class="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Rent Schedule</span>
-              <span id="dp-rs-badge" class="${sch.length?'':'hidden'} text-[10px] bg-emerald-50 text-emerald-700 px-1.5 py-0.5 rounded font-medium">${sch.length} row${sch.length!==1?'s':''}</span>
-              <div class="ml-auto">
-                <button onclick="document.getElementById('dp-pdf-input').click()" class="text-[11px] border border-violet-300 text-violet-600 hover:bg-violet-50 rounded px-2 py-1 flex items-center gap-1">
-                  <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>Import PDF
-                </button>
-              </div>
-              <input type="file" id="dp-pdf-input" accept=".pdf" class="hidden" onchange="handleDealPagePDF(this)">
-            </div>
-            <div class="overflow-x-auto">
-              <table class="w-full text-sm min-w-[480px]">
-                <thead class="bg-slate-50 text-slate-500 text-xs uppercase tracking-wider">
-                  <tr>
-                    <th class="text-left font-medium px-4 py-2">Start date</th>
-                    <th class="text-left font-medium px-4 py-2">End date</th>
-                    <th class="text-center font-medium px-3 py-2">Mo.</th>
-                    <th class="text-right font-medium px-4 py-2">Lease rate</th>
-                    <th class="text-right font-medium px-4 py-2">Total rent</th>
-                    <th class="text-center font-medium px-3 py-2">Comm %</th>
-                    <th class="text-right font-medium px-4 py-2">Comm $</th>
-                  </tr>
-                </thead>
-                <tbody id="dp-rb">${dpRentRows(sch)}</tbody>
-                <tfoot id="dp-rs-foot" style="${sch.length?'':'display:none'}">
-                  <tr class="border-t border-violet-100" style="background:#f5f3ff">
-                    <td colspan="4" class="px-4 py-2 text-right text-[10px] uppercase tracking-wider text-violet-700 font-semibold">Total Rent</td>
-                    <td class="px-4 py-2 text-right tabular-nums font-semibold text-violet-700">${sch.length?fm(total):'—'}</td>
-                    <td colspan="2"></td>
-                  </tr>
-                </tfoot>
-              </table>
-            </div>
-          </div>
+  // Transaction
+  document.getElementById('dp-trans').innerHTML = [
+    frSingle('Transaction Value', fmtUSD(deal.value)),
+    frSingle('Broker Gross', fmtUSD(deal.gross)),
+    frSingle('Close Probability', (deal.probability ?? 50) + '%'),
+    ld.commencement_date ? frSingle('Commencement Date', ld.commencement_date) : '',
+    ld.expiration_date   ? frSingle('Expiration Date', ld.expiration_date)     : '',
+    ld.term_months       ? frSingle('Lease Term', ld.term_months + ' Months')  : '',
+    ld.security_deposit  ? frSingle('Security Deposit', ld.security_deposit)   : '',
+  ].join('');
 
-        </div>
-      </div>
-    </div>`;
+  // Rent schedule
+  dpRefreshRentSection(deal);
 }
 
 function closeDealPage() {
-  document.getElementById('modal-root').innerHTML = '';
+  document.getElementById('deal-page').style.display = 'none';
+  document.getElementById('pipeline-page').style.display = '';
   dealPageId = null;
 }
 
 function dpRentRows(sch) {
   if (!sch.length) return `<tr><td colspan="7">
-    <div class="px-4 py-8 flex flex-col items-center gap-3 text-center">
+    <div class="px-4 py-10 flex flex-col items-center gap-3 text-center">
       <div class="w-10 h-10 rounded-lg bg-slate-100 flex items-center justify-center">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="1.8"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
       </div>
@@ -1351,17 +1416,50 @@ function dpRentRows(sch) {
     </div>
   </td></tr>`;
   return sch.map(row => {
-    const rate = parseFloat((row.monthly_rent||'').replace(/[$,]/g,''));
+    const rate = parseFloat((row.monthly_rent || '').replace(/[$,]/g, ''));
     return `<tr class="border-t border-slate-100 hover:bg-slate-50">
       <td class="px-4 py-2 tabular-nums text-sm">${esc(row.start)}</td>
       <td class="px-4 py-2 tabular-nums text-sm">${esc(row.end)}</td>
-      <td class="px-3 py-2 text-center text-slate-500 tabular-nums text-sm">${row.months??'—'}</td>
-      <td class="px-4 py-2 text-right tabular-nums font-medium text-sm">${isNaN(rate)?'—':fm(rate)}</td>
-      <td class="px-4 py-2 text-right tabular-nums text-sm">${row.total?fm(row.total):'—'}</td>
+      <td class="px-3 py-2 text-center text-slate-500 tabular-nums text-sm">${row.months ?? '—'}</td>
+      <td class="px-4 py-2 text-right tabular-nums font-medium text-sm">${isNaN(rate) ? '—' : fm(rate)}</td>
+      <td class="px-4 py-2 text-right tabular-nums text-sm">${row.total ? fm(row.total) : '—'}</td>
       <td class="px-3 py-2 text-center text-slate-400 tabular-nums text-sm">0%</td>
       <td class="px-4 py-2 text-right tabular-nums text-slate-400 text-sm">$0.00</td>
     </tr>`;
   }).join('');
+}
+
+function dpRefreshRentSection(deal) {
+  const ld = deal.leaseData || {};
+  const sch = ld.rent_schedule || [];
+  const total = sch.reduce((s, r) => s + (r.total || 0), 0);
+  const hasSaved = !!localStorage.getItem('bp_ld_' + deal.id);
+
+  document.getElementById('dp-rb').innerHTML = dpRentRows(sch);
+  const foot = document.getElementById('dp-rs-foot');
+  foot.style.display = sch.length ? '' : 'none';
+  if (sch.length) document.getElementById('dp-rs-total').textContent = fm(total);
+
+  const badge = document.getElementById('dp-rs-badge');
+  if (sch.length) { badge.textContent = sch.length + ' row' + (sch.length !== 1 ? 's' : ''); badge.classList.remove('hidden'); }
+  else badge.classList.add('hidden');
+
+  const saveBtn = document.getElementById('dp-save-btn');
+  saveBtn.style.display = sch.length ? '' : 'none';
+  saveBtn.innerHTML = hasSaved
+    ? `<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 13l4 4 10-10"/></svg>Saved`
+    : `<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17 21 17 13 7 13"/><polyline points="7 3 7 8 15 8"/></svg>Save`;
+  saveBtn.className = hasSaved
+    ? 'text-[11px] bg-emerald-50 text-emerald-700 border border-emerald-200 rounded px-2.5 py-1 font-medium flex items-center gap-1'
+    : 'text-[11px] bg-violet-500 hover:bg-violet-600 text-white rounded px-2.5 py-1 font-medium flex items-center gap-1';
+}
+
+function saveDealPage() {
+  const deal = DEALS.find(d => d.id === dealPageId);
+  if (!deal?.leaseData) return;
+  localStorage.setItem('bp_ld_' + deal.id, JSON.stringify(deal.leaseData));
+  dpRefreshRentSection(deal);
+  flashToast('Rent schedule saved');
 }
 
 async function handleDealPagePDF(input) {
@@ -1372,10 +1470,10 @@ async function handleDealPagePDF(input) {
   const key = getApiKey();
   if (!key) { flashToast('Add an API key first'); return; }
 
-  const rb = document.getElementById('dp-rb');
-  rb.innerHTML = `<tr><td colspan="7" class="px-4 py-6 text-center">
+  document.getElementById('dp-rb').innerHTML = `<tr><td colspan="7" class="px-4 py-8 text-center">
     <span class="spinner"></span><span class="text-slate-500 text-sm ml-2">Extracting rent schedule…</span>
   </td></tr>`;
+  document.getElementById('dp-save-btn').style.display = 'none';
 
   try {
     const bytes = new Uint8Array(await f.arrayBuffer());
@@ -1396,7 +1494,7 @@ async function handleDealPagePDF(input) {
         ]}]
       })
     });
-    if (!resp.ok) { const e = await resp.json().catch(()=>({})); throw new Error(e.error?.message||`API error ${resp.status}`); }
+    if (!resp.ok) { const e = await resp.json().catch(() => ({})); throw new Error(e.error?.message || `API error ${resp.status}`); }
 
     const apiData = await resp.json();
     const raw = apiData.content?.[0]?.text || '';
@@ -1409,27 +1507,18 @@ async function handleDealPagePDF(input) {
     if (extracted.expiration_date)   deal.leaseData.expiration_date   = extracted.expiration_date;
     if (extracted.rent_schedule?.length) {
       deal.leaseData.rent_schedule = extracted.rent_schedule;
-      const total = extracted.rent_schedule.reduce((s,r)=>s+(r.total||0),0);
-      deal.leaseData.total_rent = total;
-      if (total) deal.value = total;
+      const t = extracted.rent_schedule.reduce((s, r) => s + (r.total || 0), 0);
+      deal.leaseData.total_rent = t;
+      if (t) deal.value = t;
     }
 
-    const sch = deal.leaseData.rent_schedule || [];
-    rb.innerHTML = dpRentRows(sch);
-    const total = sch.reduce((s,r)=>s+(r.total||0),0);
-    const foot = document.getElementById('dp-rs-foot');
-    if (sch.length) {
-      foot.style.display = '';
-      foot.querySelector('td:nth-child(2)').textContent = fm(total);
-    }
-    const badge = document.getElementById('dp-rs-badge');
-    badge.textContent = sch.length+' row'+(sch.length!==1?'s':'');
-    badge.classList.remove('hidden');
-    flashToast(`Rent schedule imported — ${sch.length} row${sch.length!==1?'s':''}`);
+    dpRefreshRentSection(deal);
+    const n = deal.leaseData.rent_schedule?.length || 0;
+    flashToast(`Rent schedule imported — ${n} row${n !== 1 ? 's' : ''}`);
 
   } catch (err) {
     const msg = err.message === 'Failed to fetch' ? 'Network error — check API key' : err.message;
-    rb.innerHTML = `<tr><td colspan="7" class="px-4 py-5 text-center text-rose-600 text-sm">
+    document.getElementById('dp-rb').innerHTML = `<tr><td colspan="7" class="px-4 py-5 text-center text-rose-600 text-sm">
       ${esc(msg)}
       <button onclick="document.getElementById('dp-pdf-input').click()" class="text-violet-600 hover:underline ml-2">Try again</button>
     </td></tr>`;
