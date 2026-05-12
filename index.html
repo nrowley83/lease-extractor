@@ -234,9 +234,14 @@
         <!-- Overview header -->
         <div class="flex items-center justify-between mb-4">
           <h2 class="text-lg font-semibold text-slate-800">Overview</h2>
-          <button class="border border-slate-200 bg-white rounded-md px-3 py-1.5 text-sm flex items-center gap-1.5 hover:bg-slate-50 text-slate-600">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4z"/></svg>Edit
-          </button>
+          <div class="flex items-center gap-2">
+            <button id="dp-save-btn" onclick="saveDealPage()" style="display:none" class="text-sm bg-violet-500 hover:bg-violet-600 text-white rounded-md px-3 py-1.5 font-medium flex items-center gap-1.5">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17 21 17 13 7 13"/><polyline points="7 3 7 8 15 8"/></svg>Save
+            </button>
+            <button class="border border-slate-200 bg-white rounded-md px-3 py-1.5 text-sm flex items-center gap-1.5 hover:bg-slate-50 text-slate-600">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4z"/></svg>Edit
+            </button>
+          </div>
         </div>
 
         <!-- Row 1: Internal Brokers + Outside Brokers -->
@@ -288,9 +293,6 @@
             <span class="font-semibold text-slate-800">Rent Schedule</span>
             <span id="dp-rs-badge" class="hidden text-[10px] bg-emerald-50 text-emerald-700 px-1.5 py-0.5 rounded font-medium"></span>
             <div class="ml-auto flex items-center gap-2">
-              <button id="dp-save-btn" onclick="saveDealPage()" style="display:none" class="text-sm bg-violet-500 hover:bg-violet-600 text-white rounded-md px-3 py-1.5 font-medium flex items-center gap-1.5">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17 21 17 13 7 13"/><polyline points="7 3 7 8 15 8"/></svg>Save
-              </button>
               <button onclick="document.getElementById('dp-pdf-input').click()" class="text-sm border border-violet-300 text-violet-600 hover:bg-violet-50 rounded-md px-3 py-1.5 flex items-center gap-1.5">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>Import PDF
               </button>
@@ -312,10 +314,14 @@
               </thead>
               <tbody id="dp-rb"></tbody>
               <tfoot id="dp-rs-foot" style="display:none">
-                <tr class="border-t border-violet-100" style="background:#f5f3ff">
-                  <td colspan="4" class="px-5 py-2.5 text-right text-xs uppercase tracking-wider text-violet-700 font-semibold">Total Rent</td>
-                  <td id="dp-rs-total" class="px-5 py-2.5 text-right tabular-nums font-semibold text-violet-700">—</td>
-                  <td colspan="2"></td>
+                <tr class="border-t-2 border-slate-300 bg-slate-50 font-semibold text-slate-800">
+                  <td id="dp-total-start"     class="px-5 py-3 tabular-nums text-sm"></td>
+                  <td id="dp-total-end"       class="px-5 py-3 tabular-nums text-sm"></td>
+                  <td id="dp-total-months"    class="px-4 py-3 text-center tabular-nums text-sm"></td>
+                  <td                         class="px-5 py-3"></td>
+                  <td id="dp-rs-total"        class="px-5 py-3 text-right tabular-nums text-sm"></td>
+                  <td id="dp-total-comm-pct"  class="px-4 py-3 text-center tabular-nums text-sm"></td>
+                  <td id="dp-total-comm-dol"  class="px-5 py-3 text-right tabular-nums text-sm"></td>
                 </tr>
               </tfoot>
             </table>
@@ -1513,7 +1519,15 @@ function dpRefreshRentSection(deal) {
   document.getElementById('dp-rb').innerHTML = dpRentRows(sch);
   const foot = document.getElementById('dp-rs-foot');
   foot.style.display = sch.length ? '' : 'none';
-  if (sch.length) document.getElementById('dp-rs-total').textContent = fm(total);
+  if (sch.length) {
+    const totalMonths = sch.reduce((s, r) => s + (r.months || 0), 0);
+    document.getElementById('dp-total-start').textContent    = sch[0]?.start || '—';
+    document.getElementById('dp-total-end').textContent      = sch[sch.length - 1]?.end || '—';
+    document.getElementById('dp-total-months').textContent   = totalMonths || '—';
+    document.getElementById('dp-rs-total').textContent       = fm(total);
+    document.getElementById('dp-total-comm-pct').textContent = '0%';
+    document.getElementById('dp-total-comm-dol').textContent = '$0.00';
+  }
 
   const badge = document.getElementById('dp-rs-badge');
   if (sch.length) { badge.textContent = sch.length + ' row' + (sch.length !== 1 ? 's' : ''); badge.classList.remove('hidden'); }
