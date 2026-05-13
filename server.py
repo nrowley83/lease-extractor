@@ -28,7 +28,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.send_response(404); self.end_headers(); return
         length = int(self.headers.get('Content-Length', 0))
         body = self.rfile.read(length)
-        api_key = self.headers.get('X-Api-Key', '')
+        api_key = self.headers.get('X-Api-Key', '') or os.environ.get('ANTHROPIC_API_KEY', '')
         req = urllib.request.Request(
             'https://api.anthropic.com/v1/messages', data=body,
             headers={'x-api-key': api_key, 'anthropic-version': '2023-06-01',

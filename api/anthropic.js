@@ -1,7 +1,7 @@
 export default async function handler(req, res) {
   if (req.method !== 'POST') { res.status(405).end(); return; }
 
-  const apiKey = req.headers['x-api-key'] || '';
+  const apiKey = req.headers['x-api-key'] || process.env.ANTHROPIC_API_KEY || '';
 
   try {
     const upstream = await fetch('https://api.anthropic.com/v1/messages', {
